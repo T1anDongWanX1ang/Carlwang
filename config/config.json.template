@@ -1,0 +1,100 @@
+{
+  "api": {
+    "base_url": "https://api.tweetscout.io/v2",
+    "endpoints": {
+      "list_tweets": "/list-tweets"
+    },
+    "headers": {
+      "Accept": "application/json",
+      "ApiKey": "YOUR_TWEETSCOUT_API_KEY"
+    },
+    "default_params": {
+      "list_id": "1896516371435122886"
+    },
+    "pagination": {
+      "page_size": 100,
+      "max_pages": 10
+    },
+    "timeout": 30,
+    "retry_attempts": 3,
+    "retry_delay": 5
+  },
+  "chatgpt": {
+    "api_key": "YOUR_OPENAI_API_KEY",
+    "model": "gpt-3.5-turbo",
+    "timeout": 30,
+    "max_retries": 3,
+    "retry_delay": 2,
+    "batch_size": 10,
+    "enable_topic_analysis": true,
+    "enable_sentiment_analysis": true,
+    "enable_kol_analysis": true,
+    "enable_project_analysis": true
+  },
+  "database": {
+    "type": "mysql",
+    "host": "YOUR_DATABASE_HOST",
+    "port": 9030,
+    "database": "YOUR_DATABASE_NAME",
+    "username": "YOUR_DATABASE_USERNAME",
+    "password": "YOUR_DATABASE_PASSWORD",
+    "tables": {
+      "tweet": "twitter_tweet",
+      "user": "twitter_user",
+      "topic": "topics",
+      "kol": "kols",
+      "project": "twitter_projects"
+    },
+    "connection_pool": {
+      "max_connections": 10,
+      "min_connections": 1,
+      "connection_timeout": 30,
+      "idle_timeout": 600
+    },
+    "options": {
+      "useUnicode": true,
+      "characterEncoding": "utf8",
+      "serverTimezone": "GMT",
+      "useSSL": false,
+      "allowPublicKeyRetrieval": true
+    }
+  },
+  "scheduler": {
+    "interval_minutes": 5,
+    "max_workers": 1,
+    "enable_logging": true
+  },
+  "field_mapping": {
+    "tweet": {
+      "id_str": "id_str",
+      "conversation_id_str": "conversation_id_str",
+      "in_reply_to_status_id_str": "in_reply_to_status_id_str",
+      "full_text": "full_text",
+      "created_at": "created_at",
+      "bookmark_count": "bookmark_count",
+      "favorite_count": "favorite_count",
+      "quote_count": "quote_count",
+      "reply_count": "reply_count",
+      "retweet_count": "retweet_count",
+      "view_count": "view_count"
+    },
+    "user": {
+      "id_str": "id_str",
+      "screen_name": "screen_name",
+      "name": "name",
+      "description": "description",
+      "avatar": "avatar",
+      "created_at": "created_at",
+      "followers_count": "followers_count",
+      "friends_count": "friends_count",
+      "statuses_count": "statuses_count"
+    }
+  },
+  "logging": {
+    "level": "DEBUG",
+    "format": "%(asctime)s - %(name)s - %(levelname)s - %(funcName)s:%(lineno)d - %(message)s",
+    "file": "logs/twitter_crawler.log",
+    "max_file_size": "10MB",
+    "backup_count": 5
+  }
+}

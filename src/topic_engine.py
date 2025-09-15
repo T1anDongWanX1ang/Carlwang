@@ -1,0 +1,328 @@
+"""
+话题分析引擎
+整合话题提取、分析和存储的完整流程
+"""
+import logging
+from typing import List, Dict, Any, Optional
+from datetime import datetime, timedelta
+
+from .database.tweet_dao import tweet_dao
+from .database.topic_dao import topic_dao
+from .utils.topic_analyzer import TopicAnalyzer
+from .utils.config_manager import config
+from .utils.logger import get_logger
+from .models.tweet import Tweet
+from .models.topic import Topic
+
+
+class TopicEngine:
+    """话题分析引擎"""
+    
+    def __init__(self):
+        """初始化话题引擎"""
+        self.logger = get_logger(__name__)
+        self.tweet_dao = tweet_dao
+        self.topic_dao = topic_dao
+        self.topic_analyzer = TopicAnalyzer()
+        
+        # 配置参数
+        self.chatgpt_config = config.get('chatgpt', {})
+        self.enable_topic_analysis = self.chatgpt_config.get('enable_topic_analysis', True)
+        self.batch_size = self.chatgpt_config.get('batch_size', 10)
+        
+        # 统计信息
+        self.analysis_count = 0
+        self.success_count = 0
+        self.error_count = 0
+        self.topics_generated = 0
+        
+        self.logger.info("话题分析引擎初始化完成")
+    
+    def analyze_recent_tweets(self, hours: int = 24, max_tweets: int = 100) -> bool:
+        """
+        分析最近的推文并生成话题
+        
+        Args:
+            hours: 分析最近多少小时的推文
+            max_tweets: 最大分析推文数量
+            
+        Returns:
+            是否成功
+        """
+        if not self.enable_topic_analysis:
+            self.logger.info("话题分析功能已禁用")
+            return True
+        
+        try:
+            self.analysis_count += 1
+            self.logger.info(f"开始分析最近 {hours} 小时的推文（最多 {max_tweets} 条）")
+            
+            # 1. 获取最近的推文
+            end_time = datetime.now()
+            start_time = end_time - timedelta(hours=hours)
+            
+            recent_tweets = self.tweet_dao.get_tweets_by_date_range(
+                start_date=start_time,
+                end_date=end_time,
+                limit=max_tweets
+            )
+            
+            if not recent_tweets:
+                self.logger.warning("没有找到最近的推文数据")
+                return True
+            
+            self.logger.info(f"获取到 {len(recent_tweets)} 条最近推文")
+            
+            # 2. 分批处理推文以控制ChatGPT API调用
+            topics = []
+            for i in range(0, len(recent_tweets), self.batch_size):
+                batch_tweets = recent_tweets[i:i + self.batch_size]
+                self.logger.info(f"处理推文批次 {i//self.batch_size + 1}/{(len(recent_tweets)-1)//self.batch_size + 1}")
+                
+                # 提取话题
+                batch_topics = self.topic_analyzer.extract_topics_from_tweets(batch_tweets)
+                topics.extend(batch_topics)
+            
+            if not topics:
+                self.logger.warning("未能从推文中提取到有效话题")
+                return True
+            
+            self.logger.info(f"成功提取 {len(topics)} 个话题")
+            
+            # 3. 话题聚类和去重
+            clustered_topics = self.topic_analyzer.cluster_similar_topics(topics)
+            self.logger.info(f"聚类后得到 {len(clustered_topics)} 个话题")
+            
+            # 4. 保存话题到数据库
+            saved_count = self._save_topics_to_database(clustered_topics)
+            
+            if saved_count > 0:
+                self.logger.info(f"成功保存 {saved_count} 个话题到数据库")
+                self.success_count += 1
+                self.topics_generated += saved_count
+                return True
+            else:
+                self.logger.error("保存话题到数据库失败")
+                self.error_count += 1
+                return False
+                
+        except Exception as e:
+            self.logger.error(f"话题分析异常: {e}")
+            self.error_count += 1
+            return False
+    
+    def analyze_specific_tweets(self, tweet_ids: List[str]) -> bool:
+        """
+        分析指定的推文并生成话题
+        
+        Args:
+            tweet_ids: 推文ID列表
+            
+        Returns:
+            是否成功
+        """
+        try:
+            self.logger.info(f"开始分析指定的 {len(tweet_ids)} 条推文")
+            
+            # 获取指定推文
+            tweets = []
+            for tweet_id in tweet_ids:
+                tweet = self.tweet_dao.get_tweet_by_id(tweet_id)
+                if tweet:
+                    tweets.append(tweet)
+            
+            if not tweets:
+                self.logger.warning("没有找到有效的推文数据")
+                return True
+            
+            self.logger.info(f"获取到 {len(tweets)} 条有效推文")
+            
+            # 提取和分析话题
+            topics = self.topic_analyzer.extract_topics_from_tweets(tweets)
+            
+            if not topics:
+                self.logger.warning("未能从推文中提取到有效话题")
+                return True
+            
+            # 保存话题
+            saved_count = self._save_topics_to_database(topics)
+            
+            if saved_count > 0:
+                self.logger.info(f"成功保存 {saved_count} 个话题")
+                self.topics_generated += saved_count
+                return True
+            else:
+                self.logger.error("保存话题失败")
+                return False
+                
+        except Exception as e:
+            self.logger.error(f"分析指定推文失败: {e}")
+            return False
+    
+    def update_existing_topics(self, hours: int = 24) -> bool:
+        """
+        更新现有话题的数据
+        
+        Args:
+            hours: 更新最近多少小时的话题
+            
+        Returns:
+            是否成功
+        """
+        try:
+            self.logger.info(f"开始更新最近 {hours} 小时的话题数据")
+            
+            # 获取最近的话题
+            end_time = datetime.now()
+            start_time = end_time - timedelta(hours=hours)
+            
+            recent_topics = self.topic_dao.get_topics_by_date_range(
+                start_date=start_time,
+                end_date=end_time,
+                limit=50
+            )
+            
+            if not recent_topics:
+                self.logger.info("没有最近的话题需要更新")
+                return True
+            
+            self.logger.info(f"找到 {len(recent_topics)} 个话题需要更新")
+            
+            updated_count = 0
+            for topic in recent_topics:
+                try:
+                    # 获取话题相关的新推文（这里需要实现话题-推文关联）
+                    # 简化版本：基于话题名称搜索相关推文
+                    new_tweets = self._find_related_tweets(topic.topic_name, hours=6)
+                    
+                    if new_tweets:
+                        # 更新话题
+                        updated_topic = self.topic_analyzer.update_topic_with_new_tweets(topic, new_tweets)
+                        
+                        # 保存更新后的话题
+                        if self.topic_dao.upsert_topic(updated_topic):
+                            updated_count += 1
+                            self.logger.info(f"话题更新成功: {topic.topic_name}")
+                        
+                except Exception as e:
+                    self.logger.error(f"更新话题失败: {topic.topic_name}, 错误: {e}")
+                    continue
+            
+            self.logger.info(f"成功更新 {updated_count}/{len(recent_topics)} 个话题")
+            return updated_count > 0
+            
+        except Exception as e:
+            self.logger.error(f"更新话题数据异常: {e}")
+            return False
+    
+    def _save_topics_to_database(self, topics: List[Topic]) -> int:
+        """
+        保存话题到数据库
+        
+        Args:
+            topics: 话题列表
+            
+        Returns:
+            成功保存的数量
+        """
+        try:
+            self.logger.info(f"开始保存 {len(topics)} 个话题到数据库...")
+            
+            saved_count = self.topic_dao.batch_upsert_topics(topics)
+            
+            return saved_count
+            
+        except Exception as e:
+            self.logger.error(f"保存话题到数据库失败: {e}")
+            return 0
+    
+    def _find_related_tweets(self, topic_name: str, hours: int = 24) -> List[Tweet]:
+        """
+        查找与话题相关的推文（简化版本）
+        
+        Args:
+            topic_name: 话题名称
+            hours: 时间范围（小时）
+            
+        Returns:
+            相关推文列表
+        """
+        try:
+            # 简化版本：基于关键词匹配
+            # 在实际应用中，这里应该有更复杂的相关性算法
+            
+            end_time = datetime.now()
+            start_time = end_time - timedelta(hours=hours)
+            
+            # 获取时间范围内的推文
+            tweets = self.tweet_dao.get_tweets_by_date_range(
+                start_date=start_time,
+                end_date=end_time,
+                limit=200
+            )
+            
+            # 简单的关键词匹配
+            keywords = topic_name.lower().split()
+            related_tweets = []
+            
+            for tweet in tweets:
+                if tweet.full_text:
+                    tweet_text = tweet.full_text.lower()
+                    # 如果推文包含话题的任何关键词
+                    if any(keyword in tweet_text for keyword in keywords):
+                        related_tweets.append(tweet)
+            
+            return related_tweets[:20]  # 限制数量
+            
+        except Exception as e:
+            self.logger.error(f"查找相关推文失败: {topic_name}, 错误: {e}")
+            return []
+    
+    def get_topic_statistics(self) -> Dict[str, Any]:
+        """
+        获取话题分析统计信息
+        
+        Returns:
+            统计信息字典
+        """
+        try:
+            analyzer_stats = self.topic_analyzer.get_statistics()
+            topic_count = self.topic_dao.get_topic_count()
+            
+            # 获取热门话题
+            hot_topics = self.topic_dao.get_hot_topics(limit=5)
+            
+            return {
+                'analysis_count': self.analysis_count,
+                'success_count': self.success_count,
+                'error_count': self.error_count,
+                'success_rate': (self.success_count / max(self.analysis_count, 1)) * 100,
+                'topics_generated': self.topics_generated,
+                'total_topics_in_db': topic_count,
+                'chatgpt_stats': analyzer_stats,
+                'hot_topics_sample': [
+                    {
+                        'name': topic.topic_name,
+                        'popularity': topic.popularity,
+                        'sentiment': topic.mob_opinion_direction
+                    }
+                    for topic in hot_topics
+                ]
+            }
+            
+        except Exception as e:
+            self.logger.error(f"获取统计信息失败: {e}")
+            return {}
+    
+    def reset_statistics(self):
+        """重置统计信息"""
+        self.analysis_count = 0
+        self.success_count = 0
+        self.error_count = 0
+        self.topics_generated = 0
+        self.topic_analyzer.chatgpt_client.reset_statistics()
+        self.logger.info("话题引擎统计信息已重置")
+
+
+# 全局话题引擎实例
+topic_engine = TopicEngine() 
