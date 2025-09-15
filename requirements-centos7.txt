@@ -1,0 +1,27 @@
+# CentOS 7 / RHEL 7 兼容版本
+# 专门针对OpenSSL 1.0.2k的依赖版本
+
+# HTTP请求库 - 兼容urllib3 v1.x
+requests>=2.28.0,<2.32.0
+urllib3>=1.26.12,<2.0.0
+
+# 数据库连接
+pymysql>=1.0.0,<1.2.0
+
+# 日期时间处理
+python-dateutil>=2.8.0,<3.0.0
+
+# OpenAI API - 使用稳定版本
+openai>=0.28.0,<1.0.0
+
+# SSL/TLS相关 - 兼容旧版OpenSSL
+certifi>=2021.5.25,<2023.0.0
+cryptography>=3.4.8,<4.0.0
+
+# 编码相关
+charset-normalizer>=2.0.0,<4.0.0
+idna>=2.10,<4.0.0
+
+# 其他依赖
+six>=1.16.0
+tqdm>=4.64.0

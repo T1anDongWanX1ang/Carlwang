@@ -149,14 +149,26 @@ cd Carlwang
 ./deploy.sh
 ```
 
-### 腾讯云CVM
+### 腾讯云CVM / CentOS 7
 ```bash
-# 在CVM实例上
+# Ubuntu/Debian系统
 sudo apt update
 sudo apt install python3 python3-pip git -y
+
+# CentOS/RHEL系统
+sudo yum update -y
+sudo yum install python3 python3-pip git -y
+
+# 克隆和部署
 git clone https://github.com/T1anDongWanX1ang/Carlwang.git
 cd Carlwang
-./deploy.sh
+
+# CentOS 7系统需要特殊处理（OpenSSL兼容性）
+if [[ $(cat /etc/redhat-release 2>/dev/null | grep -i "centos.*7") ]]; then
+    ./fix_centos7.sh
+else
+    ./deploy.sh
+fi
 ```
 
 ## 🔐 安全最佳实践
@@ -229,23 +241,37 @@ python3 main.py --mode test
 
 ### 常见问题
 
-1. **API连接失败**
+1. **OpenSSL兼容性问题（CentOS 7）**
+   ```bash
+   # 错误信息：urllib3 v2 only supports OpenSSL 1.1.1+
+   # 解决方案：
+   ./fix_centos7.sh
+   
+   # 或手动修复：
+   pip install "urllib3>=1.26.12,<2.0.0"
+   pip install "requests>=2.28.0,<2.32.0"
+   ```
+
+2. **API连接失败**
    - 检查API密钥是否正确
    - 检查网络连接
    - 验证API额度
 
-2. **数据库连接失败**
+3. **数据库连接失败**
    - 检查数据库凭据
    - 验证网络连通性
    - 检查数据库服务状态
 
-3. **服务启动失败**
+4. **服务启动失败**
    ```bash
    # 查看详细日志
    ./start_service.sh logs
    
    # 测试配置
    python3 main.py --mode test
+   
+   # CentOS 7系统特殊修复
+   ./fix_centos7.sh
    ```
 
 ### 日志分析
