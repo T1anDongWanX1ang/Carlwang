@@ -241,7 +241,18 @@ python3 main.py --mode test
 
 ### 常见问题
 
-1. **OpenSSL兼容性问题（CentOS 7）**
+1. **配置文件缺失**
+   ```bash
+   # 错误信息：配置文件不存在: config/config.json
+   # 解决方案：
+   ./init_config.sh
+   
+   # 或手动创建：
+   cp config/config.json.template config/config.json
+   nano config/config.json  # 填入实际API密钥
+   ```
+
+2. **OpenSSL兼容性问题（CentOS 7）**
    ```bash
    # 错误信息：urllib3 v2 only supports OpenSSL 1.1.1+
    # 解决方案：
@@ -252,17 +263,17 @@ python3 main.py --mode test
    pip install "requests>=2.28.0,<2.32.0"
    ```
 
-2. **API连接失败**
+3. **API连接失败**
    - 检查API密钥是否正确
    - 检查网络连接
    - 验证API额度
 
-3. **数据库连接失败**
+4. **数据库连接失败**
    - 检查数据库凭据
    - 验证网络连通性
    - 检查数据库服务状态
 
-4. **服务启动失败**
+5. **服务启动失败**
    ```bash
    # 查看详细日志
    ./start_service.sh logs

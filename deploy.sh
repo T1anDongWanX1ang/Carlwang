@@ -53,7 +53,19 @@ source venv/bin/activate
 pip install --upgrade pip
 pip install -r requirements.txt
 
-# 5. 环境变量配置
+# 5. 初始化配置文件
+if [ ! -f "config/config.json" ]; then
+    print_info "初始化配置文件..."
+    if [ -f "config/config.json.template" ]; then
+        cp config/config.json.template config/config.json
+        print_success "配置文件已创建: config/config.json"
+    else
+        print_error "未找到配置模板文件: config/config.json.template"
+        exit 1
+    fi
+fi
+
+# 6. 环境变量配置
 if [ ! -f ".env" ]; then
     print_warning "未找到.env文件"
     
@@ -76,27 +88,27 @@ if [ ! -f ".env" ]; then
     fi
 fi
 
-# 6. 加载环境变量
+# 7. 加载环境变量
 if [ -f ".env" ]; then
     print_info "加载环境变量..."
     export $(grep -v '^#' .env | xargs)
 fi
 
-# 7. 验证配置
+# 8. 验证配置
 print_info "验证配置..."
 if ! python3 env_config.py; then
     print_error "配置验证失败，请检查环境变量"
     exit 1
 fi
 
-# 8. 测试连接
+# 9. 测试连接
 print_info "测试数据库和API连接..."
 if ! python3 main.py --mode test; then
     print_error "连接测试失败"
     exit 1
 fi
 
-# 9. 设置systemd服务（可选）
+# 10. 设置systemd服务（可选）
 if command -v systemctl >/dev/null 2>&1; then
     echo -n "是否设置systemd服务? (y/N): "
     read -r response

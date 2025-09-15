@@ -80,7 +80,20 @@ else
     pip install "idna>=2.10,<4.0.0"
 fi
 
-# 6. 验证安装
+# 6. 初始化配置文件
+if [ ! -f "config/config.json" ]; then
+    print_info "初始化配置文件..."
+    if [ -f "config/config.json.template" ]; then
+        cp config/config.json.template config/config.json
+        print_success "配置文件已创建: config/config.json"
+        print_warning "请编辑 config/config.json 填入实际的API密钥和数据库配置"
+    else
+        print_error "未找到配置模板文件"
+        exit 1
+    fi
+fi
+
+# 7. 验证安装
 print_info "验证依赖安装..."
 python3 -c "
 import requests
@@ -94,13 +107,13 @@ print(f'pymysql版本: {pymysql.__version__}')
 print(f'openai版本: {openai.__version__}')
 "
 
-# 7. 测试连接
+# 8. 测试连接
 print_info "测试应用连接..."
 if python3 main.py --mode test; then
     print_success "✅ 应用测试通过"
 else
-    print_error "❌ 应用测试失败，请检查配置"
-    exit 1
+    print_warning "⚠️  应用测试失败，可能需要配置API密钥和数据库"
+    print_info "请编辑 config/config.json 或运行 python3 setup_config.py"
 fi
 
 print_success "🎉 CentOS 7兼容性修复完成！"
