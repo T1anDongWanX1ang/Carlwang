@@ -8,6 +8,7 @@ import sys
 import os
 import signal
 import time
+import threading
 from datetime import datetime, timedelta
 
 # 添加项目根目录到Python路径
@@ -21,12 +22,18 @@ import logging
 
 # 全局变量用于控制程序退出
 should_exit = False
+timer_instance = None
 
 def signal_handler(signum, frame):
     """信号处理器，用于优雅地退出程序"""
-    global should_exit
+    global should_exit, timer_instance
     print(f"\n📡 接收到信号 {signum}，正在优雅退出...")
     should_exit = True
+    
+    # 取消定时器
+    if timer_instance and timer_instance.is_alive():
+        timer_instance.cancel()
+        print("⏸️ 已取消定时器")
 
 # 注册信号处理器
 signal.signal(signal.SIGINT, signal_handler)  # Ctrl+C
@@ -42,6 +49,8 @@ def print_help():
   python run_marco.py                    # 生成最新数据
   python run_marco.py now               # 生成最新数据（同上）
   python run_marco.py daemon            # 以守护进程模式运行（每30分钟自动生成）
+  python run_marco.py timer             # 以非守护进程定时器模式运行（每30分钟自动生成）
+  python run_marco.py schedule [间隔]    # 以指定间隔运行定时器（分钟）
   python run_marco.py today             # 回填今天的数据
   python run_marco.py week              # 回填最近7天数据
   python run_marco.py month             # 回填最近30天数据
@@ -54,15 +63,24 @@ def print_help():
   python run_marco.py 2025-01-01 2025-01-07  # 回填指定日期范围
 
 定时任务模式：
-  python run_marco.py daemon            # 守护进程模式，每30分钟生成一次
+  python run_marco.py daemon            # 守护进程模式，每30分钟生成一次（阻塞式）
+  python run_marco.py timer             # 定时器模式，每30分钟生成一次（非阻塞式）
+  python run_marco.py schedule 15       # 定时器模式，每15分钟生成一次
   python run_marco.py --quiet           # 静默模式，减少输出（适合crontab）
   python run_marco.py --log-file path   # 指定日志文件路径
+  python run_marco.py --background      # 后台运行模式（仅用于daemon/timer/schedule）
+
+后台运行模式：
+  python run_marco.py daemon --background              # 守护进程后台运行
+  python run_marco.py timer --background               # 定时器后台运行
+  python run_marco.py schedule 15 --background --log-file marco.log  # 自定义间隔后台运行
 
 注意：
 - 所有时间都自动对齐到30分钟间隔
 - 已存在的数据会被自动跳过
 - 使用真实AI模型进行计算
 - 守护进程模式适合长期运行，crontab模式适合定时调用
+- 推荐使用./start_marco_service.sh进行服务管理
     """)
 
 
@@ -310,6 +328,118 @@ def run_daemon_mode():
         logger.info("Marco守护进程已退出")
 
 
+def run_timer_mode(interval_minutes=30):
+    """非守护进程定时器模式，使用线程定时器"""
+    global timer_instance, should_exit
+    logger = logging.getLogger(__name__)
+    
+    print(f"⏰ 启动Marco数据定时器模式")
+    print(f"📅 每{interval_minutes}分钟生成一次Marco数据（基于最近4小时推文）")
+    print(f"🔧 使用非阻塞线程定时器")
+    print(f"🛑 按Ctrl+C优雅退出")
+    
+    logger.info(f"Marco定时器模式启动，间隔: {interval_minutes}分钟")
+    
+    def timer_callback():
+        """定时器回调函数"""
+        global timer_instance, should_exit
+        
+        if should_exit:
+            return
+        
+        try:
+            print(f"\n📊 {datetime.now().strftime('%Y-%m-%d %H:%M:%S')} 开始生成Marco数据...")
+            logger.info("定时器触发Marco数据生成")
+            
+            success = generate_latest(quiet_mode=False)
+            
+            if success:
+                print("✅ Marco数据生成完成")
+                logger.info("定时器Marco数据生成成功")
+            else:
+                print("❌ Marco数据生成失败")
+                logger.error("定时器Marco数据生成失败")
+                
+        except Exception as e:
+            print(f"💥 定时器执行异常: {e}")
+            logger.error(f"定时器执行异常: {e}", exc_info=True)
+        
+        # 如果没有收到退出信号，设置下一次定时器
+        if not should_exit:
+            schedule_next_timer(interval_minutes * 60)
+    
+    def schedule_next_timer(seconds):
+        """安排下一次定时器执行"""
+        global timer_instance, should_exit
+        
+        if should_exit:
+            return
+            
+        next_time = datetime.now() + timedelta(seconds=seconds)
+        print(f"⏰ 下次执行时间: {next_time.strftime('%Y-%m-%d %H:%M:%S')}")
+        
+        timer_instance = threading.Timer(seconds, timer_callback)
+        timer_instance.daemon = False  # 非守护线程
+        timer_instance.start()
+        logger.info(f"下次Marco数据生成时间: {next_time}")
+    
+    try:
+        # 启动时立即生成一次数据
+        print("\n📊 启动时立即生成一次Marco数据...")
+        generate_latest(quiet_mode=False)
+        
+        # 开始定时器循环
+        schedule_next_timer(interval_minutes * 60)
+        
+        # 主线程保持运行，等待信号
+        while not should_exit:
+            time.sleep(1)
+            
+            # 检查定时器是否还活着
+            if timer_instance and not timer_instance.is_alive() and not should_exit:
+                print("⚠️ 定时器意外停止，重新启动...")
+                logger.warning("定时器意外停止，重新启动")
+                schedule_next_timer(interval_minutes * 60)
+    
+    except KeyboardInterrupt:
+        print("\n📡 接收到中断信号，正在退出...")
+        should_exit = True
+    except Exception as e:
+        print(f"\n💥 定时器模式异常: {e}")
+        logger.error(f"定时器模式异常: {e}", exc_info=True)
+    finally:
+        # 清理定时器
+        if timer_instance and timer_instance.is_alive():
+            timer_instance.cancel()
+            timer_instance.join(timeout=5)
+        
+        print("🛑 Marco定时器模式已退出")
+        logger.info("Marco定时器模式已退出")
+
+
+def run_schedule_mode(interval_minutes):
+    """指定间隔的定时器模式"""
+    try:
+        interval_minutes = int(interval_minutes)
+        if interval_minutes < 1:
+            print("❌ 定时器间隔必须至少1分钟")
+            return False
+        if interval_minutes > 1440:  # 24小时
+            print("❌ 定时器间隔不能超过1440分钟（24小时）")
+            return False
+            
+        print(f"📅 使用自定义间隔: {interval_minutes} 分钟")
+        run_timer_mode(interval_minutes)
+        return True
+        
+    except ValueError:
+        print("❌ 间隔时间必须是有效的数字（分钟）")
+        return False
+    except Exception as e:
+        print(f"❌ 启动定时器模式失败: {e}")
+        return False
+
+
 def setup_logging_for_cron(log_file=None):
     """为crontab任务设置特殊的日志配置"""
     # 设置日志
@@ -332,6 +462,50 @@ def setup_logging_for_cron(log_file=None):
             print(f"⚠️ 设置日志文件失败: {e}")
 
 
+def daemonize():
+    """将进程设置为守护进程模式"""
+    import os
+    import sys
+    
+    try:
+        # 第一次fork
+        pid = os.fork()
+        if pid > 0:
+            # 父进程退出
+            sys.exit(0)
+    except OSError as e:
+        print(f"❌ 第一次fork失败: {e}")
+        sys.exit(1)
+    
+    # 从父进程环境脱离
+    os.chdir('/')
+    os.setsid()
+    os.umask(0)
+    
+    try:
+        # 第二次fork
+        pid = os.fork()
+        if pid > 0:
+            # 第一个子进程退出
+            sys.exit(0)
+    except OSError as e:
+        print(f"❌ 第二次fork失败: {e}")
+        sys.exit(1)
+    
+    # 重定向标准输入输出
+    sys.stdout.flush()
+    sys.stderr.flush()
+    
+    # 在Windows上，我们不能使用fork，所以跳过守护化
+    if os.name != 'nt':
+        si = open('/dev/null', 'r')
+        so = open('/dev/null', 'w')
+        se = open('/dev/null', 'w')
+        os.dup2(si.fileno(), sys.stdin.fileno())
+        os.dup2(so.fileno(), sys.stdout.fileno())
+        os.dup2(se.fileno(), sys.stderr.fileno())
+
+
 def parse_arguments():
     """解析命令行参数"""
     import argparse
@@ -342,6 +516,7 @@ def parse_arguments():
     parser.add_argument('arg2', nargs='?', help='参数2（结束日期）')
     parser.add_argument('--quiet', '-q', action='store_true', help='静默模式')
     parser.add_argument('--log-file', help='指定日志文件路径')
+    parser.add_argument('--background', '-b', action='store_true', help='后台运行模式')
     parser.add_argument('--help', '-h', action='store_true', help='显示帮助')
     
     return parser.parse_args()
@@ -377,6 +552,19 @@ def main():
             print_help()
             return
         
+        # 检查是否需要后台运行
+        if args.background and args.command in ['daemon', 'timer', 'schedule']:
+            if not args.quiet:
+                print("🚀 启动后台运行模式...")
+            
+            # 如果没有指定日志文件，使用默认文件
+            if not args.log_file:
+                args.log_file = 'marco_background.log'
+            
+            # 守护化进程（仅在Linux/macOS上）
+            if os.name != 'nt':
+                daemonize()
+        
         # 设置日志
         if args.log_file:
             setup_logging_for_cron(args.log_file)
@@ -395,6 +583,19 @@ def main():
         elif command == 'daemon':
             # 守护进程模式
             run_daemon_mode()
+            return
+            
+        elif command == 'timer':
+            # 非守护进程定时器模式
+            run_timer_mode()
+            return
+            
+        elif command == 'schedule':
+            # 指定间隔的定时器模式
+            interval = args.arg1 if args.arg1 else '30'
+            success = run_schedule_mode(interval)
+            if not success:
+                sys.exit(1)
             return
             
         elif command == 'help':

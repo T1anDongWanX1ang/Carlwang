@@ -61,6 +61,66 @@ python main.py --mode kol
 python main.py --mode project
 ```
 
+### Marco Data Processing
+```bash
+# Generate latest Marco data (sentiment analysis summary)
+python run_marco.py
+
+# Generate latest Marco data explicitly  
+python run_marco.py now
+
+# Run in daemon mode (blocking, every 30 minutes)
+python run_marco.py daemon
+
+# Run in timer mode (non-blocking, every 30 minutes) 
+python run_marco.py timer
+
+# Run with custom interval (non-blocking timer)
+python run_marco.py schedule 15    # Every 15 minutes
+
+# Backfill historical data
+python run_marco.py today          # Today's data
+python run_marco.py week           # Last 7 days
+python run_marco.py month          # Last 30 days
+python run_marco.py 2025-01-01     # Specific date
+python run_marco.py 2025-01-01 2025-01-07  # Date range
+
+# Utility commands
+python run_marco.py stats          # View statistics
+python run_marco.py test           # Test database connection
+python run_marco.py help           # Show help
+
+# Options
+python run_marco.py --quiet        # Silent mode for cron jobs
+python run_marco.py --log-file /path/to/log  # Custom log file
+python run_marco.py --background    # Background mode (daemon/timer/schedule only)
+
+# Background mode examples
+python run_marco.py daemon --background --log-file marco.log
+python run_marco.py timer --background
+python run_marco.py schedule 15 --background
+```
+
+### Marco Service Management
+```bash
+# Recommended way to manage Marco data processing service
+./start_marco_service.sh start                    # Start timer mode (30 min interval)
+./start_marco_service.sh start-timer 15           # Start timer mode (15 min interval)  
+./start_marco_service.sh start-daemon             # Start daemon mode
+./start_marco_service.sh stop                     # Stop service
+./start_marco_service.sh restart                  # Restart service
+./start_marco_service.sh status                   # Check service status
+./start_marco_service.sh logs 100                 # View logs (last 100 lines)
+./start_marco_service.sh monitor                  # View monitoring status
+./start_marco_service.sh once                     # Execute once
+
+# Service features:
+# - Anti-sleep protection (caffeinate on macOS, nice on Linux)
+# - Automatic monitoring and restart (every 5 minutes)
+# - Background daemon with PID file management
+# - Comprehensive logging and error handling
+```
+
 ### Service Management (Recommended for Production)
 ```bash
 # Start service with anti-sleep protection
