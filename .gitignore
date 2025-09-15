@@ -31,6 +31,9 @@ venv.bak/
 
 # Configuration files with sensitive data
 config/config.json
+.env
+.env.local
+.env.production
 
 # Logs
 *.log
