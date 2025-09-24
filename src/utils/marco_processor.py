@@ -495,7 +495,7 @@ class MarcoProcessor:
             Requirements:
             - Objective and professional tone, avoid investment advice
             - Highlight consensus views and points of disagreement
-            - Limit to 120 words or less
+            - Limit to 100 words or less
             - Output in English
 
             Please return only the summary content without any additional formatting.
@@ -504,7 +504,7 @@ class MarcoProcessor:
             summary = self.chatgpt._make_request([
                 {"role": "system", "content": "You are a professional cryptocurrency market analyst, skilled at analyzing KOL opinions and generating market summaries."},
                 {"role": "user", "content": prompt}
-            ], temperature=0.3, max_tokens=200)
+            ], temperature=0.3, max_tokens=150)
             
             if summary:
                 self.logger.info(f"生成AI总结成功，长度: {len(summary)}")
@@ -549,16 +549,13 @@ class MarcoProcessor:
             hot_topics = random.sample(topics, min(3, len(topics)))
             
             summary = f"""
-            Based on 4-hour tweet analysis ({timestamp.strftime('%Y-%m-%d %H:%M')}), crypto market shows {market_mood} dynamics.
-            
+            Based on 4-hour analysis ({timestamp.strftime('%Y-%m-%d %H:%M')}), crypto market shows {market_mood} dynamics. 
             Key discussion focuses on {', '.join(hot_topics)} sectors. {sentiment_desc}. 
-            
-            Analysis of {len(kol_tweets)} tweets shows average engagement of {avg_engagement:.1f}, reflecting community participation levels.
-            
-            Technical analysis indicates cautiously optimistic long-term outlook, with potential short-term consolidation expected.
+            Analysis of {len(kol_tweets)} tweets shows average engagement of {avg_engagement:.1f}. 
+            Technical outlook remains cautiously optimistic with potential consolidation. 
             Investors advised to monitor fundamentals and maintain risk management.
             
-            Note: This is simulated data for system demonstration purposes.
+            Note: Simulated data for demonstration.
             """
             
             return summary.strip()
