@@ -916,8 +916,18 @@ Output only the above JSON without additional explanation."""
             
             if response:
                 try:
+                    # 清理响应内容，移除代码块标记
+                    cleaned_response = response.strip()
+                    if cleaned_response.startswith('```json'):
+                        cleaned_response = cleaned_response[7:]  # 移除 ```json
+                    if cleaned_response.startswith('```'):
+                        cleaned_response = cleaned_response[3:]  # 移除 ```
+                    if cleaned_response.endswith('```'):
+                        cleaned_response = cleaned_response[:-3]  # 移除结尾的 ```
+                    cleaned_response = cleaned_response.strip()
+                    
                     # 尝试解析JSON响应
-                    result = json.loads(response.strip())
+                    result = json.loads(cleaned_response)
                     
                     # 验证返回的数据
                     if isinstance(result, dict) and 'projects' in result:
@@ -1167,8 +1177,18 @@ Output only the above JSON without additional explanation."""
             
             if response:
                 try:
+                    # 清理响应内容，移除代码块标记
+                    cleaned_response = response.strip()
+                    if cleaned_response.startswith('```json'):
+                        cleaned_response = cleaned_response[7:]  # 移除 ```json
+                    if cleaned_response.startswith('```'):
+                        cleaned_response = cleaned_response[3:]  # 移除 ```
+                    if cleaned_response.endswith('```'):
+                        cleaned_response = cleaned_response[:-3]  # 移除结尾的 ```
+                    cleaned_response = cleaned_response.strip()
+                    
                     # 尝试解析JSON响应
-                    result = json.loads(response.strip())
+                    result = json.loads(cleaned_response)
                     
                     # 验证返回的数据
                     if isinstance(result, dict) and 'projects' in result:
