@@ -452,7 +452,7 @@ class MarcoProcessor:
         """
         try:
             if not kol_tweets:
-                return "时间窗口内暂无重要KOL观点。"
+                return "No significant KOL opinions available in the current time window."
             
             # 如果是模拟模式，生成模拟总结
             if mock_mode:
@@ -462,7 +462,7 @@ class MarcoProcessor:
             important_tweets = self._filter_important_tweets(kol_tweets)
             
             if not important_tweets:
-                return "当前数据集中暂无重要KOL观点。"
+                return "No significant KOL opinions found in current dataset."
             
             # 构建总结prompt
             tweets_text = []
@@ -479,32 +479,32 @@ class MarcoProcessor:
             tweets_content = "\n".join(tweets_text)
             
             prompt = f"""
-            请基于以下加密货币KOL的重要观点，生成专业的市场总结：
+            Based on the following important crypto KOL opinions, generate a professional market summary:
 
-            分析时间: {timestamp.strftime('%Y-%m-%d %H:%M')}
-            KOL观点数据（按影响力权重排序）:
+            Analysis Time: {timestamp.strftime('%Y-%m-%d %H:%M')}
+            KOL Opinion Data (sorted by influence weight):
             {tweets_content}
 
-            请提供综合分析，包括：
-            1. 主要讨论的热点话题和项目
-            2. KOL们的整体市场态度和预期
-            3. 重要的技术分析或基本面观点
-            4. 风险警告或机会提醒
-            5. 当前市场情绪的主要特征
+            Please provide a comprehensive analysis including:
+            1. Main trending topics and projects being discussed
+            2. Overall market sentiment and expectations from KOLs
+            3. Important technical analysis or fundamental viewpoints
+            4. Risk warnings or opportunity alerts
+            5. Key characteristics of current market sentiment
 
-            要求：
-            - 客观专业的语调，避免投资建议
-            - 重点突出共识观点和分歧点
-            - 控制在200-300字以内
-            - 使用中文输出
+            Requirements:
+            - Objective and professional tone, avoid investment advice
+            - Highlight consensus views and points of disagreement
+            - Limit to 120 words or less
+            - Output in English
 
-            请直接返回总结内容，不要包含其他格式。
+            Please return only the summary content without any additional formatting.
             """
             
             summary = self.chatgpt._make_request([
-                {"role": "system", "content": "你是一个专业的加密货币市场分析师，擅长分析KOL观点并生成市场总结。"},
+                {"role": "system", "content": "You are a professional cryptocurrency market analyst, skilled at analyzing KOL opinions and generating market summaries."},
                 {"role": "user", "content": prompt}
-            ], temperature=0.3, max_tokens=400)
+            ], temperature=0.3, max_tokens=200)
             
             if summary:
                 self.logger.info(f"生成AI总结成功，长度: {len(summary)}")
@@ -534,38 +534,38 @@ class MarcoProcessor:
             
             # 模拟市场情绪
             if avg_engagement > 100:
-                market_mood = "活跃"
-                sentiment_desc = "市场关注度较高，投资者情绪相对积极"
+                market_mood = "active"
+                sentiment_desc = "High market attention with relatively positive investor sentiment"
             elif avg_engagement > 50:
-                market_mood = "稳定"
-                sentiment_desc = "市场表现平稳，投资者持观望态度"
+                market_mood = "stable"
+                sentiment_desc = "Steady market performance with cautious investor outlook"
             else:
-                market_mood = "平静"
-                sentiment_desc = "市场相对平静，交易活跃度较低"
+                market_mood = "quiet"
+                sentiment_desc = "Relatively calm market with low trading activity"
             
             # 模拟热门话题
             import random
-            topics = ["比特币", "以太坊", "DeFi", "NFT", "Layer2", "AI概念", "RWA", "Meme币"]
+            topics = ["Bitcoin", "Ethereum", "DeFi", "NFT", "Layer2", "AI tokens", "RWA", "Meme coins"]
             hot_topics = random.sample(topics, min(3, len(topics)))
             
             summary = f"""
-            基于近4小时的推文分析（{timestamp.strftime('%Y-%m-%d %H:%M')}），当前加密货币市场呈现{market_mood}态势。
+            Based on 4-hour tweet analysis ({timestamp.strftime('%Y-%m-%d %H:%M')}), crypto market shows {market_mood} dynamics.
             
-            主要讨论热点集中在{', '.join(hot_topics)}等领域。{sentiment_desc}。
+            Key discussion focuses on {', '.join(hot_topics)} sectors. {sentiment_desc}. 
             
-            从{len(kol_tweets)}条推文的互动数据来看，平均互动量为{avg_engagement:.1f}，反映了社区的参与度。
+            Analysis of {len(kol_tweets)} tweets shows average engagement of {avg_engagement:.1f}, reflecting community participation levels.
             
-            技术面分析显示，投资者对长期趋势保持谨慎乐观，短期内市场可能继续震荡整理。
-            建议投资者关注基本面变化，做好风险管理。
+            Technical analysis indicates cautiously optimistic long-term outlook, with potential short-term consolidation expected.
+            Investors advised to monitor fundamentals and maintain risk management.
             
-            注：本总结为模拟数据，仅供系统演示使用。
+            Note: This is simulated data for system demonstration purposes.
             """
             
             return summary.strip()
             
         except Exception as e:
             self.logger.error(f"生成模拟总结失败: {e}")
-            return f"基于{len(kol_tweets)}条推文的市场分析暂时无法生成，请稍后重试。"
+            return f"Market analysis based on {len(kol_tweets)} tweets is temporarily unavailable, please try again later."
     
     def _filter_important_tweets(self, kol_tweets: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
         """
