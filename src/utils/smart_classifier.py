@@ -251,7 +251,7 @@ class SmartClassifier:
         tweet
     ) -> ClassificationResult:
         """
-        处理话题分类结果
+        处理话题分类结果，优化识别TopicEngine生成的话题
         
         Args:
             topic_name: 话题名称
@@ -265,8 +265,8 @@ class SmartClassifier:
             # 标准化话题名称
             normalized_name = self._normalize_topic_name(topic_name)
             
-            # 查找现有话题
-            existing_topic = self.topic_dao.get_topic_by_name(normalized_name)
+            # 智能查找现有话题（包括模糊匹配）
+            existing_topic = self._find_best_matching_topic(normalized_name, tweet.full_text)
             
             if existing_topic:
                 # 找到现有话题 - 更新其热度
@@ -422,6 +422,131 @@ class SmartClassifier:
         normalized = name.strip().lower()
         return topic_mapping.get(normalized, name.strip().title())
     
+    def _find_best_matching_topic(self, topic_name: str, tweet_text: str) -> Optional:
+        """
+        智能查找最佳匹配的话题，包括精确匹配和模糊匹配
+        
+        Args:
+            topic_name: 话题名称
+            tweet_text: 推文内容
+            
+        Returns:
+            匹配的话题对象或None
+        """
+        try:
+            # 1. 精确匹配话题名称
+            exact_match = self.topic_dao.get_topic_by_name(topic_name)
+            if exact_match:
+                self.logger.debug(f"精确匹配到话题: {topic_name}")
+                return exact_match
+            
+            # 2. 搜索相似话题（关键词匹配）
+            similar_topics = self.topic_dao.search_topics(topic_name, limit=5)
+            if similar_topics:
+                # 选择最相似的话题
+                best_match = self._select_best_topic_match(similar_topics, topic_name, tweet_text)
+                if best_match:
+                    self.logger.info(f"模糊匹配到话题: {topic_name} -> {best_match.topic_name}")
+                    return best_match
+            
+            # 3. 基于推文内容关键词搜索话题
+            tweet_keywords = self._extract_keywords_from_text(tweet_text)
+            for keyword in tweet_keywords:
+                keyword_topics = self.topic_dao.search_topics(keyword, limit=3)
+                if keyword_topics:
+                    best_match = self._select_best_topic_match(keyword_topics, topic_name, tweet_text)
+                    if best_match:
+                        self.logger.info(f"基于关键词'{keyword}'匹配到话题: {best_match.topic_name}")
+                        return best_match
+            
+            return None
+            
+        except Exception as e:
+            self.logger.error(f"智能话题匹配失败: {e}")
+            return None
+    
+    def _select_best_topic_match(self, topics: list, target_name: str, tweet_text: str):
+        """
+        从候选话题列表中选择最佳匹配
+        
+        Args:
+            topics: 候选话题列表
+            target_name: 目标话题名称
+            tweet_text: 推文内容
+            
+        Returns:
+            最佳匹配的话题或None
+        """
+        if not topics:
+            return None
+        
+        try:
+            best_topic = None
+            best_score = 0.0
+            
+            target_words = set(target_name.lower().split())
+            tweet_words = set(tweet_text.lower().split())
+            
+            for topic in topics:
+                score = 0.0
+                topic_words = set(topic.topic_name.lower().split())
+                
+                # 计算话题名称相似度
+                name_intersection = target_words.intersection(topic_words)
+                if name_intersection:
+                    score += len(name_intersection) / max(len(target_words), len(topic_words)) * 0.6
+                
+                # 计算推文内容相关度
+                if topic.key_entities:
+                    entity_words = set(topic.key_entities.lower().split())
+                    content_intersection = tweet_words.intersection(entity_words)
+                    if content_intersection:
+                        score += len(content_intersection) / len(entity_words) * 0.4
+                
+                # 选择得分最高的话题（需要达到最低阈值）
+                if score > best_score and score >= 0.3:
+                    best_score = score
+                    best_topic = topic
+            
+            if best_topic:
+                self.logger.debug(f"最佳匹配话题: {best_topic.topic_name} (得分: {best_score:.2f})")
+            
+            return best_topic
+            
+        except Exception as e:
+            self.logger.error(f"选择最佳话题匹配失败: {e}")
+            return None
+    
+    def _extract_keywords_from_text(self, text: str) -> list:
+        """
+        从文本中提取关键词
+        
+        Args:
+            text: 文本内容
+            
+        Returns:
+            关键词列表
+        """
+        if not text:
+            return []
+        
+        # 简单的关键词提取（可以后续改进为更复杂的NLP方法）
+        import re
+        
+        # 移除URL、@用户名、#标签符号
+        cleaned_text = re.sub(r'http[s]?://\S+|@\w+|#', '', text.lower())
+        
+        # 提取有意义的词汇（长度大于2的词）
+        words = re.findall(r'\b\w{3,}\b', cleaned_text)
+        
+        # 过滤停用词（简化版本）
+        stop_words = {'the', 'and', 'for', 'are', 'but', 'not', 'you', 'all', 'can', 'her', 'was', 'one', 'our', 'out', 'day', 'get', 'has', 'him', 'his', 'how', 'its', 'may', 'new', 'now', 'old', 'see', 'two', 'who', 'boy', 'did', 'its', 'let', 'put', 'say', 'she', 'too', 'use'}
+        
+        keywords = [word for word in words if word not in stop_words and len(word) > 2]
+        
+        # 返回前5个关键词
+        return keywords[:5]
+    
     def _create_new_project(self, project_name: str, brief: str) -> Optional[str]:
         """
         创建新项目
@@ -445,7 +570,7 @@ class SmartClassifier:
                 project_id=project_id,
                 name=project_name,
                 symbol=symbol,
-                summary=brief or f"{project_name} 加密货币项目",
+                summary=brief or f"{project_name} cryptocurrency project",
                 created_at=datetime.now(),
                 update_time=datetime.now()
             )

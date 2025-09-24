@@ -112,7 +112,7 @@ def run_once(args):
         page_size=args.page_size
     )
     
-    # 显示统计信息
+    # 显示爬取统计信息
     stats = crawler.get_statistics()
     logger.info("=" * 30)
     logger.info("爬取统计:")
@@ -121,7 +121,36 @@ def run_once(args):
     logger.info("=" * 30)
     
     if success:
-        logger.info("数据爬取完成")
+        logger.info("数据爬取完成，开始话题分析...")
+        
+        # 执行话题分析（包含propagation_speed计算）
+        max_tweets = (args.max_pages or 3) * (args.page_size or 100)
+        topic_success = topic_engine.analyze_recent_tweets(hours=24, max_tweets=max_tweets)
+        
+        if topic_success:
+            # 显示话题分析结果
+            topic_stats = topic_engine.get_topic_statistics()
+            logger.info("=" * 30)
+            logger.info("话题分析统计:")
+            for key, value in topic_stats.items():
+                if key != 'hot_topics_sample':  # 跳过复杂的嵌套数据
+                    logger.info(f"{key}: {value}")
+            
+            # 显示生成的话题
+            from src.database.topic_dao import topic_dao
+            topic_count = topic_dao.get_topic_count()
+            if topic_count > 0:
+                hot_topics = topic_dao.get_hot_topics(limit=3)
+                logger.info("\n最新热门话题:")
+                for i, topic in enumerate(hot_topics, 1):
+                    logger.info(f"{i}. {topic.topic_name} (热度: {topic.popularity})")
+                    logger.info(f"   传播速度: 5m={topic.propagation_speed_5m}, 1h={topic.propagation_speed_1h}, 4h={topic.propagation_speed_4h}")
+            
+            logger.info("=" * 30)
+            logger.info("单次执行完成（包含话题分析和传播速度计算）")
+        else:
+            logger.warning("话题分析失败，但数据爬取成功")
+        
         sys.exit(0)
     else:
         logger.error("数据爬取失败")
@@ -140,12 +169,37 @@ def run_scheduled(args):
     
     # 创建爬取任务函数
     def crawl_task():
-        """定时爬取任务"""
-        return crawler.crawl_tweets(
+        """定时爬取任务（包含话题分析）"""
+        logger.info("执行定时爬取任务...")
+        
+        # 执行爬取
+        crawl_success = crawler.crawl_tweets(
             list_id=args.list_id,
             max_pages=args.max_pages,
             page_size=args.page_size
         )
+        
+        if crawl_success:
+            logger.info("爬取完成，开始话题分析...")
+            # 执行话题分析（包含propagation_speed计算）
+            max_tweets = (args.max_pages or 3) * (args.page_size or 100)
+            topic_success = topic_engine.analyze_recent_tweets(hours=24, max_tweets=max_tweets)
+            
+            if topic_success:
+                logger.info("话题分析完成（包含传播速度计算）")
+            else:
+                logger.warning("话题分析失败，但爬取成功")
+            
+            # 执行项目分析
+            logger.info("开始项目分析...")
+            project_success = project_engine.analyze_recent_tweets(hours=24, max_tweets=max_tweets//2)
+            
+            if project_success:
+                logger.info("项目分析完成")
+            else:
+                logger.warning("项目分析失败")
+        
+        return crawl_success
     
     # 设置调度器
     scheduler.set_crawler(crawl_task)
