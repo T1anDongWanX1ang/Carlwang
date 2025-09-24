@@ -45,13 +45,13 @@ Alternatively, you can manually edit `config/config.json` and replace:
 
 ### Running the Crawler
 ```bash
-# Single execution (crawl once and exit)
+# Single execution (crawl data and run project analysis, then exit)
 python main.py --mode once
 
-# Continuous scheduling (every 5 minutes by default)
+# Continuous scheduling (crawl data + project analysis every 5 minutes)
 python main.py --mode schedule --interval 5
 
-# Topic analysis (analyze recent tweets for topics)
+# Topic analysis (independent service - analyze recent tweets for topics)
 python main.py --mode topic
 
 # KOL analysis
@@ -59,6 +59,24 @@ python main.py --mode kol
 
 # Project analysis  
 python main.py --mode project
+```
+
+### Topic Analysis Service
+```bash
+# Start independent topic analysis service (every 5 minutes)
+./start_topic_service.sh start
+
+# Check topic service status
+./start_topic_service.sh status
+
+# Stop topic service
+./start_topic_service.sh stop
+
+# Run topic analysis once
+./start_topic_service.sh once
+
+# View topic service logs
+./start_topic_service.sh logs
 ```
 
 ### Marco Data Processing
@@ -151,23 +169,35 @@ This is a **Twitter data crawler and analysis system** for cryptocurrency social
 
 ### Core Components Architecture
 
-**Data Flow Pipeline:**
+**Service Architecture:**
 ```
-Twitter API → Data Collector → Tweet Enricher → Multi-Engine Analysis → Database Storage
-                                      ↓
-                              Smart Classifier
-                                      ↓
-                            Topic/KOL/Project Analysis
+Main Service:     Twitter API → Data Collector → Tweet Enricher → Project Analysis → Database Storage
+                                        ↓
+                                Smart Classifier
+                                        ↓
+                               Project Classification
+
+Topic Service:    Database → Topic Engine → Topic Analysis → Database Storage
+                                   ↓
+                          Topic Discovery & Clustering
 ```
 
 **Key Modules:**
 
-1. **Main Crawler (`src/crawler.py`)**: Orchestrates the entire data collection and processing pipeline
-2. **API Client (`src/api/twitter_api.py`)**: Handles Twitter data fetching via TweetScout API  
+1. **Main Service (`main.py --mode schedule`)**: Data collection and project analysis pipeline
+   - Data crawling via TweetScout API
+   - Project analysis and classification
+   - Continuous scheduling (every 5 minutes)
+
+2. **Topic Service (`start_topic_service.sh`)**: Independent topic analysis service
+   - Topic discovery and clustering from existing tweet data
+   - Propagation speed calculation
+   - Separate scheduling (every 5 minutes)
+
 3. **Analysis Engines**: 
-   - `src/topic_engine.py` - Topic discovery and clustering
+   - `src/topic_engine.py` - Topic discovery and clustering (independent service)
    - `src/kol_engine.py` - KOL identification and influence scoring
-   - `src/project_engine.py` - Crypto project analysis
+   - `src/project_engine.py` - Crypto project analysis (integrated in main service)
 4. **AI Processing**:
    - `src/api/chatgpt_client.py` - ChatGPT integration for content analysis
    - `src/utils/smart_classifier.py` - Intelligent content classification
