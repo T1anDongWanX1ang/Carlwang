@@ -24,7 +24,7 @@ class TopicAnalyzer:
     
     def extract_topics_from_tweets(self, tweets: List[Tweet]) -> List[Topic]:
         """
-        从推文列表中提取话题
+        从推文列表中提取话题（优化版本，减少单条推文话题）
         
         Args:
             tweets: 推文列表
@@ -34,43 +34,51 @@ class TopicAnalyzer:
         """
         self.logger.info(f"开始从 {len(tweets)} 条推文中提取话题...")
         
+        # 第一步：预处理和初步分组
+        tweet_groups = self._preprocess_and_group_tweets(tweets)
+        
         topics_dict = {}  # 用于话题聚合
         processed_count = 0
         
-        for tweet in tweets:
-            if not tweet.full_text:
-                continue
-                
+        for group_tweets in tweet_groups:
             try:
-                # 使用ChatGPT提取话题
-                topic_info = self.chatgpt_client.extract_topic_from_tweet(tweet.full_text)
+                if len(group_tweets) == 1:
+                    # 单条推文：使用单推文话题提取
+                    tweet = group_tweets[0]
+                    topic_info = self._extract_topic_from_single_tweet(tweet)
+                else:
+                    # 多条推文：使用批量话题提取
+                    topic_info = self._extract_topic_from_tweet_group(group_tweets)
                 
                 if topic_info and topic_info.get('topic_name'):
                     topic_name = topic_info['topic_name']
                     
-                    # 话题聚合（相同话题名称合并）
-                    if topic_name in topics_dict:
-                        # 更新现有话题
-                        existing_topic = topics_dict[topic_name]
-                        existing_topic['tweets'].append(tweet)
-                        existing_topic['engagement_total'] += tweet.engagement_total or 0
+                    # 智能话题聚合（基于语义相似度）
+                    merged_topic_name = self._find_similar_topic(topic_name, topics_dict.keys())
+                    
+                    if merged_topic_name:
+                        # 合并到相似话题
+                        existing_topic = topics_dict[merged_topic_name]
+                        existing_topic['tweets'].extend(group_tweets)
+                        existing_topic['engagement_total'] += sum(t.engagement_total or 0 for t in group_tweets)
+                        self.logger.debug(f"话题合并: '{topic_name}' → '{merged_topic_name}'")
                     else:
                         # 创建新话题
                         topics_dict[topic_name] = {
                             'topic_name': topic_name,
                             'brief': topic_info.get('brief', ''),
-                            'tweets': [tweet],
-                            'engagement_total': tweet.engagement_total or 0,
-                            'created_at': tweet.created_at_datetime or datetime.now()
+                            'tweets': group_tweets,
+                            'engagement_total': sum(t.engagement_total or 0 for t in group_tweets),
+                            'created_at': min(t.created_at_datetime or datetime.now() for t in group_tweets)
                         }
                 
-                processed_count += 1
+                processed_count += len(group_tweets)
                 
                 if processed_count % 10 == 0:
                     self.logger.info(f"已处理 {processed_count}/{len(tweets)} 条推文")
                 
             except Exception as e:
-                self.logger.error(f"处理推文失败: {tweet.id_str}, 错误: {e}")
+                self.logger.error(f"处理推文组失败, 错误: {e}")
                 continue
         
         # 转换为Topic对象列表
@@ -82,6 +90,195 @@ class TopicAnalyzer:
         
         self.logger.info(f"成功提取 {len(topics)} 个话题")
         return topics
+    
+    def _preprocess_and_group_tweets(self, tweets: List[Tweet]) -> List[List[Tweet]]:
+        """
+        预处理推文并进行初步分组
+        基于关键词、时间、用户等特征进行分组
+        
+        Args:
+            tweets: 推文列表
+            
+        Returns:
+            推文分组列表
+        """
+        try:
+            # 简单的关键词分组算法
+            groups = []
+            ungrouped_tweets = tweets.copy()
+            
+            # 第一轮：基于关键词分组
+            while ungrouped_tweets:
+                current_tweet = ungrouped_tweets.pop(0)
+                current_group = [current_tweet]
+                
+                # 提取当前推文的关键词
+                current_keywords = self._extract_keywords(current_tweet.full_text)
+                
+                # 查找相似推文
+                i = 0
+                while i < len(ungrouped_tweets):
+                    candidate_tweet = ungrouped_tweets[i]
+                    candidate_keywords = self._extract_keywords(candidate_tweet.full_text)
+                    
+                    # 计算关键词重叠度
+                    if self._calculate_keyword_similarity(current_keywords, candidate_keywords) > 0.3:
+                        current_group.append(candidate_tweet)
+                        ungrouped_tweets.pop(i)
+                    else:
+                        i += 1
+                
+                groups.append(current_group)
+            
+            self.logger.info(f"推文分组完成: {len(tweets)} 条推文 → {len(groups)} 个组")
+            
+            # 统计分组情况
+            group_sizes = [len(g) for g in groups]
+            single_tweet_groups = sum(1 for size in group_sizes if size == 1)
+            multi_tweet_groups = len(groups) - single_tweet_groups
+            
+            self.logger.info(f"分组统计: {single_tweet_groups} 个单推文组, {multi_tweet_groups} 个多推文组")
+            
+            return groups
+            
+        except Exception as e:
+            self.logger.error(f"推文分组失败: {e}")
+            # 降级为单独处理
+            return [[tweet] for tweet in tweets]
+    
+    def _extract_keywords(self, text: str) -> set:
+        """提取文本关键词（简化版本）"""
+        if not text:
+            return set()
+        
+        # 简单的关键词提取
+        import re
+        
+        # 提取话题标签、币种符号、关键术语
+        keywords = set()
+        
+        # 话题标签 #hashtag
+        hashtags = re.findall(r'#\w+', text.lower())
+        keywords.update(hashtags)
+        
+        # 币种符号 $SYMBOL
+        symbols = re.findall(r'\$[A-Z]{2,10}', text.upper())
+        keywords.update(symbols)
+        
+        # 常见关键词
+        crypto_terms = [
+            'bitcoin', 'btc', 'ethereum', 'eth', 'defi', 'nft', 'dao', 'dex', 'cex',
+            'trading', 'investment', 'market', 'pump', 'dump', 'bull', 'bear',
+            'blockchain', 'crypto', 'token', 'coin', 'yield', 'staking', 'mining'
+        ]
+        
+        text_lower = text.lower()
+        for term in crypto_terms:
+            if term in text_lower:
+                keywords.add(term)
+        
+        return keywords
+    
+    def _calculate_keyword_similarity(self, keywords1: set, keywords2: set) -> float:
+        """计算关键词相似度"""
+        if not keywords1 or not keywords2:
+            return 0.0
+        
+        intersection = keywords1.intersection(keywords2)
+        union = keywords1.union(keywords2)
+        
+        return len(intersection) / len(union) if union else 0.0
+    
+    def _extract_topic_from_single_tweet(self, tweet: Tweet) -> Dict[str, Any]:
+        """
+        从单条推文提取话题（更严格的标准）
+        """
+        try:
+            # 对单条推文使用原有方法
+            topic_info = self.chatgpt_client.extract_topic_from_tweet(tweet.full_text)
+            
+            # 额外验证：单条推文话题必须有足够的重要性
+            if topic_info and topic_info.get('topic_name'):
+                # 检查互动数据，低互动推文归类到通用话题
+                engagement = (tweet.favorite_count or 0) + (tweet.retweet_count or 0) * 2
+                
+                if engagement < 5:  # 低互动推文
+                    # 添加通用标识，便于后续合并
+                    topic_name = topic_info['topic_name']
+                    if not any(word in topic_name.lower() for word in ['市场', 'defi', 'bitcoin', 'crypto']):
+                        topic_info['topic_name'] = f"加密货币讨论 - {topic_name}"
+            
+            return topic_info
+            
+        except Exception as e:
+            self.logger.error(f"单推文话题提取失败: {e}")
+            return None
+    
+    def _extract_topic_from_tweet_group(self, tweets: List[Tweet]) -> Dict[str, Any]:
+        """
+        从推文组提取话题
+        """
+        try:
+            # 合并推文内容进行批量分析
+            combined_text = "\n".join(tweet.full_text for tweet in tweets if tweet.full_text)
+            
+            # 使用现有的单推文方法处理第一条推文（简化版本）
+            if tweets:
+                topic_info = self.chatgpt_client.extract_topic_from_tweet(tweets[0].full_text)
+                return topic_info
+            
+            return None
+            
+        except Exception as e:
+            self.logger.error(f"推文组话题提取失败: {e}")
+            return None
+    
+    def _find_similar_topic(self, topic_name: str, existing_topics: List[str]) -> str:
+        """
+        查找相似的已存在话题
+        
+        Args:
+            topic_name: 新话题名称
+            existing_topics: 已存在的话题名称列表
+            
+        Returns:
+            相似话题名称，如果没有则返回None
+        """
+        if not existing_topics:
+            return None
+        
+        topic_name_lower = topic_name.lower()
+        
+        for existing_topic in existing_topics:
+            existing_topic_lower = existing_topic.lower()
+            
+            # 1. 完全相同
+            if topic_name_lower == existing_topic_lower:
+                return existing_topic
+            
+            # 2. 包含关系
+            if topic_name_lower in existing_topic_lower or existing_topic_lower in topic_name_lower:
+                return existing_topic
+            
+            # 3. 关键词重叠度
+            topic_words = set(topic_name_lower.split())
+            existing_words = set(existing_topic_lower.split())
+            
+            if topic_words and existing_words:
+                overlap = len(topic_words.intersection(existing_words))
+                union = len(topic_words.union(existing_words))
+                similarity = overlap / union
+                
+                if similarity > 0.6:  # 60%相似度阈值
+                    return existing_topic
+            
+            # 4. 特殊规则：通用话题合并
+            generic_patterns = ['加密货币讨论', '市场分析', '投资策略', 'defi', 'bitcoin']
+            for pattern in generic_patterns:
+                if pattern in topic_name_lower and pattern in existing_topic_lower:
+                    return existing_topic
+        
+        return None
     
     def _create_topic_from_data(self, topic_data: Dict[str, Any]) -> Optional[Topic]:
         """
@@ -226,8 +423,12 @@ class TopicAnalyzer:
         Returns:
             传播速度字典 {"5m": speed, "1h": speed, "4h": speed}
         """
-        if len(tweets) < 2:
+        if not tweets:
             return {"5m": 0.0, "1h": 0.0, "4h": 0.0}
+        
+        # 单条推文：基于推文传播能力计算潜在速度
+        if len(tweets) == 1:
+            return self._calculate_single_tweet_propagation_speed(tweets[0])
         
         # 按时间排序
         sorted_tweets = sorted(tweets, key=lambda t: t.created_at_datetime or datetime.now())
@@ -245,6 +446,83 @@ class TopicAnalyzer:
         
         return speeds
     
+    def _calculate_single_tweet_propagation_speed(self, tweet: Tweet) -> Dict[str, float]:
+        """
+        计算单条推文的传播速度
+        基于推文的互动数据预测传播能力
+        
+        Args:
+            tweet: 单条推文
+            
+        Returns:
+            传播速度字典
+        """
+        try:
+            # 获取推文的互动数据
+            likes = tweet.favorite_count or 0
+            retweets = tweet.retweet_count or 0
+            replies = tweet.reply_count or 0
+            views = getattr(tweet, 'view_count', 0) or 0
+            
+            # 计算总互动强度
+            engagement_intensity = likes + (retweets * 3) + (replies * 2)
+            
+            # 计算推文年龄（分钟）
+            if tweet.created_at_datetime:
+                tweet_age_minutes = (datetime.now() - tweet.created_at_datetime).total_seconds() / 60
+                tweet_age_minutes = max(1, tweet_age_minutes)  # 避免除零
+            else:
+                tweet_age_minutes = 60  # 默认1小时
+            
+            # 基于互动强度和时间计算传播速度
+            # 如果推文很新但已有高互动，说明传播速度快
+            if tweet_age_minutes <= 5:
+                # 推文发布5分钟内
+                speed_5m = engagement_intensity / max(tweet_age_minutes, 0.5)
+                speed_1h = speed_5m * 0.6  # 预测1小时内会放缓
+                speed_4h = speed_5m * 0.3  # 预测4小时内进一步放缓
+            elif tweet_age_minutes <= 60:
+                # 推文发布1小时内
+                speed_5m = 0  # 5分钟窗口已过
+                speed_1h = engagement_intensity / max(tweet_age_minutes, 1)
+                speed_4h = speed_1h * 0.5  # 预测4小时内会放缓
+            elif tweet_age_minutes <= 240:
+                # 推文发布4小时内
+                speed_5m = 0
+                speed_1h = 0
+                speed_4h = engagement_intensity / max(tweet_age_minutes, 1)
+            else:
+                # 推文发布超过4小时，基于历史数据估算平均速度
+                avg_speed = engagement_intensity / tweet_age_minutes
+                speed_5m = avg_speed * 2  # 推测早期传播更快
+                speed_1h = avg_speed * 1.5
+                speed_4h = avg_speed
+            
+            # 应用阈值限制，避免过高的数值
+            speed_5m = min(100, max(0, speed_5m))
+            speed_1h = min(50, max(0, speed_1h))
+            speed_4h = min(25, max(0, speed_4h))
+            
+            # 如果有观看数，进一步优化计算
+            if views > 0:
+                view_factor = min(2.0, views / max(engagement_intensity, 1))
+                speed_5m *= view_factor
+                speed_1h *= view_factor
+                speed_4h *= view_factor
+            
+            self.logger.debug(f"单条推文传播速度计算: 互动={engagement_intensity}, 年龄={tweet_age_minutes:.1f}分钟")
+            self.logger.debug(f"计算结果: 5m={speed_5m:.2f}, 1h={speed_1h:.2f}, 4h={speed_4h:.2f}")
+            
+            return {
+                "5m": round(speed_5m, 2),
+                "1h": round(speed_1h, 2), 
+                "4h": round(speed_4h, 2)
+            }
+            
+        except Exception as e:
+            self.logger.error(f"单条推文传播速度计算失败: {e}")
+            return {"5m": 0.0, "1h": 0.0, "4h": 0.0}
+    
     def _calculate_timeframe_speed(self, sorted_tweets: List[Tweet], window_minutes: int) -> float:
         """
         计算特定时间窗口的传播速度
@@ -256,7 +534,8 @@ class TopicAnalyzer:
         Returns:
             传播速度
         """
-        if len(sorted_tweets) < 2:
+        if len(sorted_tweets) < 1:
+            self.logger.debug(f"推文数量不足: {len(sorted_tweets)}")
             return 0.0
         
         # 获取时间窗口内的推文
@@ -268,42 +547,55 @@ class TopicAnalyzer:
             if tweet.created_at_datetime and tweet.created_at_datetime >= start_time
         ]
         
-        if len(window_tweets) < 2:
+        self.logger.debug(f"{window_minutes}分钟窗口内推文数: {len(window_tweets)}")
+        
+        if len(window_tweets) < 1:
             return 0.0
         
-        # 计算传播速度指标
-        unique_users = set(tweet.id_str[:10] for tweet in window_tweets)  # 简化的用户识别
-        total_engagement = sum(
-            (tweet.favorite_count or 0) + 
-            (tweet.retweet_count or 0) + 
-            (tweet.reply_count or 0)
-            for tweet in window_tweets
-        )
+        # 使用推文ID作为用户识别（每条推文代表一个用户参与）
+        unique_users = set(tweet.id_str for tweet in window_tweets)
         
-        # 传播速度 = (参与用户数 * 总互动数) / 时间窗口(分钟)
-        base_speed = (len(unique_users) * total_engagement) / window_minutes
+        # 计算总互动数
+        total_engagement = 0
+        for tweet in window_tweets:
+            engagement = (tweet.favorite_count or 0) + (tweet.retweet_count or 0) + (tweet.reply_count or 0)
+            total_engagement += engagement
+        
+        self.logger.debug(f"唯一用户数: {len(unique_users)}, 总互动数: {total_engagement}")
+        
+        # 改进的传播速度公式
+        if total_engagement == 0:
+            # 如果没有互动数据，使用推文数量作为基础指标
+            base_speed = len(window_tweets) / window_minutes * 10  # 乘以10提高数值可见性
+        else:
+            # 传播速度 = (参与用户数 + 总互动数) / 时间窗口(分钟)
+            base_speed = (len(unique_users) + total_engagement) / window_minutes
         
         # 病毒式传播检测
-        time_intervals = []
-        for i in range(1, len(window_tweets)):
-            if (window_tweets[i].created_at_datetime and 
-                window_tweets[i-1].created_at_datetime):
-                interval = (window_tweets[i].created_at_datetime - 
-                           window_tweets[i-1].created_at_datetime).total_seconds() / 60
-                time_intervals.append(interval)
-        
-        if time_intervals:
-            avg_interval = sum(time_intervals) / len(time_intervals)
-            if avg_interval < 1:  # 平均间隔小于1分钟
-                viral_multiplier = 2.0
-            elif avg_interval < 5:
-                viral_multiplier = 1.5
-            else:
-                viral_multiplier = 1.0
-        else:
-            viral_multiplier = 1.0
+        viral_multiplier = 1.0
+        if len(window_tweets) >= 2:
+            time_intervals = []
+            for i in range(1, len(window_tweets)):
+                if (window_tweets[i].created_at_datetime and 
+                    window_tweets[i-1].created_at_datetime):
+                    interval = (window_tweets[i].created_at_datetime - 
+                               window_tweets[i-1].created_at_datetime).total_seconds() / 60
+                    time_intervals.append(interval)
+            
+            if time_intervals:
+                avg_interval = sum(time_intervals) / len(time_intervals)
+                self.logger.debug(f"平均推文间隔: {avg_interval:.2f}分钟")
+                
+                if avg_interval < 1:  # 平均间隔小于1分钟
+                    viral_multiplier = 2.0
+                elif avg_interval < 5:
+                    viral_multiplier = 1.5
+                else:
+                    viral_multiplier = 1.0
         
         final_speed = base_speed * viral_multiplier
+        
+        self.logger.debug(f"{window_minutes}分钟传播速度: {final_speed:.2f} (基础:{base_speed:.2f}, 倍数:{viral_multiplier})")
         
         return round(final_speed, 2)
     
