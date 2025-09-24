@@ -31,7 +31,7 @@ class LanguageDetector:
     
     def detect_user_language(self, user_id: str, 
                            user_description: str = None,
-                           recent_days: int = 30,
+                           recent_days: int = 15,
                            min_tweets: int = 3) -> str:
         """
         检测用户的主要语言
@@ -123,7 +123,7 @@ class LanguageDetector:
             AND full_text IS NOT NULL
             AND LENGTH(full_text) > 10
             ORDER BY created_at_datetime DESC
-            LIMIT 50
+            LIMIT 20
             """
             
             return self.db_manager.execute_query(sql, [user_id, start_time, end_time])

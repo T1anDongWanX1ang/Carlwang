@@ -181,8 +181,8 @@ def run_scheduled(args):
         
         if crawl_success:
             logger.info("爬取完成，开始话题分析...")
-            # 执行话题分析（包含propagation_speed计算）
-            max_tweets = (args.max_pages or 3) * (args.page_size or 100)
+            # 执行话题分析（包含propagation_speed计算，限制推文数量以提高速度）
+            max_tweets = min(100, (args.max_pages or 3) * (args.page_size or 100))
             topic_success = topic_engine.analyze_recent_tweets(hours=24, max_tweets=max_tweets)
             
             if topic_success:
@@ -190,9 +190,9 @@ def run_scheduled(args):
             else:
                 logger.warning("话题分析失败，但爬取成功")
             
-            # 执行项目分析
+            # 执行项目分析（减少推文数量以提高速度）
             logger.info("开始项目分析...")
-            project_success = project_engine.analyze_recent_tweets(hours=24, max_tweets=max_tweets//2)
+            project_success = project_engine.analyze_recent_tweets(hours=24, max_tweets=min(50, max_tweets//2))
             
             if project_success:
                 logger.info("项目分析完成")
