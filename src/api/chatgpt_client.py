@@ -101,25 +101,25 @@ class ChatGPTClient:
         """
         try:
             prompt = f"""
-            请分析以下加密货币相关推文，提取主要话题：
+            Please analyze the following cryptocurrency-related tweet and extract the main topic:
 
-            推文内容: {tweet_content}
+            Tweet content: {tweet_content}
 
-            请提供：
-            1. topic_name: 话题的简洁名称（5-15字，突出核心主题）
-            2. brief: 话题的简要描述（20-50字，解释话题内容和背景）
+            Please provide:
+            1. topic_name: Concise topic name (5-15 words, highlighting the core theme)
+            2. brief: Brief topic description (20-50 words, explaining topic content and background)
 
-            注意：
-            - 如果推文是纯广告或垃圾内容，请返回 "无效话题"
-            - 专注于加密货币、区块链、DeFi、NFT等相关主题
-            - 话题名称要具体且有意义
+            Notes:
+            - If the tweet is pure advertising or spam content, return "Invalid Topic"
+            - Focus on cryptocurrency, blockchain, DeFi, NFT and related themes
+            - Topic name should be specific and meaningful
 
-            请以JSON格式返回：
-            {{"topic_name": "话题名称", "brief": "话题描述"}}
+            Please return in JSON format:
+            {{"topic_name": "Topic Name", "brief": "Topic Description"}}
             """
             
             messages = [
-                {"role": "system", "content": "你是一个专业的加密货币市场分析师，擅长识别和分析加密货币相关话题。"},
+                {"role": "system", "content": "You are a professional cryptocurrency market analyst skilled in identifying and analyzing cryptocurrency-related topics."},
                 {"role": "user", "content": prompt}
             ]
             
@@ -140,7 +140,7 @@ class ChatGPTClient:
                         brief = result['brief'].strip()
                         
                         # 过滤无效话题
-                        if topic_name == "无效话题" or not topic_name:
+                        if topic_name == "Invalid Topic" or not topic_name:
                             return None
                             
                         return {
@@ -170,28 +170,28 @@ class ChatGPTClient:
         """
         try:
             prompt = f"""
-            请分析以下加密货币相关文本的情感倾向：
+            Please analyze the sentiment tendency of the following cryptocurrency-related text:
 
-            文本内容: {text}
+            Text content: {text}
 
-            请评估：
-            1. sentiment: 情感方向（positive/negative/neutral）
-            2. confidence: 置信度（0.0-1.0，表示判断的确定程度）
-            3. reasoning: 判断理由（简要说明）
+            Please evaluate:
+            1. sentiment: Sentiment direction (positive/negative/neutral)
+            2. confidence: Confidence level (0.0-1.0, indicating certainty of judgment)
+            3. reasoning: Reasoning for judgment (brief explanation)
 
-            注意：
-            - 专注于加密货币市场情绪
-            - 考虑专业术语和俚语的含义
-            - positive: 看涨、乐观、支持
-            - negative: 看跌、悲观、批评
-            - neutral: 中性、客观分析
+            Notes:
+            - Focus on cryptocurrency market sentiment
+            - Consider the meaning of technical terms and slang
+            - positive: bullish, optimistic, supportive
+            - negative: bearish, pessimistic, critical
+            - neutral: neutral, objective analysis
 
-            请以JSON格式返回：
-            {{"sentiment": "positive", "confidence": 0.8, "reasoning": "判断理由"}}
+            Please return in JSON format:
+            {{"sentiment": "positive", "confidence": 0.8, "reasoning": "Reasoning"}}
             """
             
             messages = [
-                {"role": "system", "content": "你是一个专业的加密货币情感分析师，擅长理解市场情绪和投资者心态。"},
+                {"role": "system", "content": "You are a professional cryptocurrency sentiment analyst skilled in understanding market sentiment and investor psychology."},
                 {"role": "user", "content": prompt}
             ]
             
@@ -268,50 +268,50 @@ class ChatGPTClient:
             tweets_text = "\n".join([f"- {tweet}" for tweet in tweets])
             
             # 使用新的专业prompt
-            system_prompt = "你是一个资深的web3媒体编辑，擅长快速从Crypto相关的热门话题中梳理并总结清楚KOL们发表的观点。"
+            system_prompt = "You are an experienced web3 media editor, skilled at quickly organizing and summarizing KOL opinions from crypto-related trending topics."
             
             if existing_summary:
                 user_prompt = f"""
-请更新话题 "{topic_name}" 的KOL观点总结，结合新的推文内容：
+Please update the KOL opinion summary for topic "{topic_name}", combining new tweet content:
 
-现有总结:
+Existing Summary:
 {existing_summary}
 
-新推文内容:
+New Tweet Content:
 {tweets_text}
 
-请按照以下JSON格式更新KOL们的共识观点（按持有相同观点的KOL人数排序，输出排名前三的观点）：
+Please update the KOL consensus opinions in the following JSON format (sorted by number of KOLs holding the same opinion, output top 3 opinions):
 {{
   "topic_id": "{topic_name}",
   "summary": [
     {{
-      "viewpoint": "观点简述",
-      "related_tweets": ["体现该观点的推文内容摘要"]
+      "viewpoint": "Opinion summary",
+      "related_tweets": ["Tweet content excerpts reflecting this opinion"]
     }}
   ]
 }}
 
-除了输出上述JSON外，不用额外说明。
+Output only the above JSON without additional explanation.
                 """
             else:
                 user_prompt = f"""
-你会收到关于话题 "{topic_name}" 的若干推文，格式如下：
+You will receive multiple tweets about topic "{topic_name}" in the following format:
 
-相关推文:
+Related Tweets:
 {tweets_text}
 
-请总结KOL们对此事件共识观点有哪些（按持有相同观点的KOL人数排序，输出排名前三的观点，也可以不满三条），按以下JSON格式输出：
+Please summarize the consensus opinions of KOLs on this event (sorted by number of KOLs holding the same opinion, output top 3 opinions, can be less than 3), in the following JSON format:
 {{
   "topic_id": "{topic_name}",
   "summary": [
     {{
-      "viewpoint": "观点简述",
-      "related_tweets": ["体现该观点的推文内容摘要"]
+      "viewpoint": "Opinion summary",
+      "related_tweets": ["Tweet content excerpts reflecting this opinion"]
     }}
   ]
 }}
 
-除了输出上述JSON外，不用额外说明。
+Output only the above JSON without additional explanation.
                 """
             
             messages = [
@@ -370,21 +370,21 @@ class ChatGPTClient:
                 })
             
             # 使用JSON序列化构建用户提示
-            user_prompt = f"""你会收到关于某一事件的若干KOL推文，格式如下：
+            user_prompt = f"""You will receive multiple KOL tweets about an event in the following format:
 {json.dumps(input_data, ensure_ascii=False, indent=2)}
 
-请总结KOL们对此事件共识观点有哪些（按持有相同观点的KOL人数排序，输出排名前三的观点，也可以不满三条），按以下JSON格式输出：
+Please summarize the consensus opinions of KOLs on this event (sorted by number of KOLs holding the same opinion, output top 3 opinions, can be less than 3), in the following JSON format:
 {{
-  "topic_id": 事件ID,
+  "topic_id": Event ID,
   "summary": [
     {{
-      "viewpoint": 观点简述,
-      "related_tweets": [体现该观点的推文ID，可能多个],
+      "viewpoint": Opinion summary,
+      "related_tweets": [Tweet IDs reflecting this opinion, may be multiple],
     }}
   ]
 }}
 
-除了输出上述JSON外，不用额外说明。"""
+Output only the above JSON without additional explanation."""
             
             messages = [
                 {"role": "system", "content": system_prompt},
@@ -419,21 +419,21 @@ class ChatGPTClient:
             tweets_text = "\n".join([f"- {tweet}" for tweet in tweets_sample])
             
             prompt = f"""
-            请分析以下推文中散户的整体观点方向：
+            Please analyze the overall opinion direction of retail investors in the following tweets:
 
-            推文内容:
+            Tweet content:
             {tweets_text}
 
-            请评估散户的整体情绪倾向：
-            - positive: 整体乐观、看涨、支持
-            - negative: 整体悲观、看跌、批评
-            - neutral: 观点分化或中性
+            Please evaluate the overall sentiment tendency of retail investors:
+            - positive: Overall optimistic, bullish, supportive
+            - negative: Overall pessimistic, bearish, critical
+            - neutral: Divided opinions or neutral
 
-            只需返回一个词: positive、negative 或 neutral
+            Return only one word: positive, negative or neutral
             """
             
             messages = [
-                {"role": "system", "content": "你是一个专业的市场情绪分析师，擅长分析散户投资者的集体情绪。"},
+                {"role": "system", "content": "You are a professional market sentiment analyst skilled in analyzing collective emotions of retail investors."},
                 {"role": "user", "content": prompt}
             ]
             
@@ -844,20 +844,20 @@ class ChatGPTClient:
             tweets_content = "\n".join(tweets_text)
             
             prompt = f"""
-            你是一个专业的加密货币项目分析专家，请从以下推文中识别、分析和分类加密货币项目。
+            You are a professional cryptocurrency project analysis expert. Please identify, analyze and classify cryptocurrency projects from the following tweets.
 
-            推文内容:
+            Tweet content:
             {tweets_content}
 
-            请按照以下规则进行分析：
+            Please analyze according to the following rules:
 
-            1. **项目识别规则**:
-            - 识别完整项目名称（如"Ethereum", "Uniswap"）
-            - 识别代币符号（如"ETH", "UNI", "BTC"）
-            - 识别别名（如"以太坊"、"大饼"、"姨太"）
-            - 确认是真实加密货币项目讨论
+            1. **Project Identification Rules**:
+            - Identify complete project names (e.g., "Ethereum", "Uniswap")
+            - Identify token symbols (e.g., "ETH", "UNI", "BTC")
+            - Identify aliases (e.g., "Ethereum", "Bitcoin", "ETH")
+            - Confirm genuine cryptocurrency project discussions
 
-            2. **项目分类体系**:
+            2. **Project Classification System**:
             - Layer1: Bitcoin, Ethereum, Solana, Cardano
             - Layer2: Arbitrum, Optimism, Polygon, Base  
             - DeFi: Uniswap, AAVE, Compound, MakerDAO
@@ -868,18 +868,18 @@ class ChatGPTClient:
             - AI: Fetch.ai, SingularityNET
             - Privacy: Monero, Zcash
 
-            3. **叙事标签体系**:
-            - 技术叙事: "Scalability", "Interoperability", "Privacy"
-            - 应用叙事: "DeFi Summer", "NFT Boom", "GameFi", "RWA"
-            - 生态叙事: "Ethereum Killers", "Multi-chain"
-            - 新兴叙事: "AI+Crypto", "DePin", "Liquid Staking"
+            3. **Narrative Tag System**:
+            - Technical narratives: "Scalability", "Interoperability", "Privacy"
+            - Application narratives: "DeFi Summer", "NFT Boom", "GameFi", "RWA"
+            - Ecosystem narratives: "Ethereum Killers", "Multi-chain"
+            - Emerging narratives: "AI+Crypto", "DePin", "Liquid Staking"
 
-            4. **情感分析框架**:
-            - 积极情感 (70-100分): 看涨、推荐、技术突破
-            - 中性情感 (30-70分): 客观分析、技术讨论
-            - 消极情感 (0-30分): 看跌、风险警告
+            4. **Sentiment Analysis Framework**:
+            - Positive sentiment (70-100 points): bullish, recommendation, technical breakthrough
+            - Neutral sentiment (30-70 points): objective analysis, technical discussion
+            - Negative sentiment (0-30 points): bearish, risk warning
 
-            请返回JSON格式的分析结果：
+            Please return analysis results in JSON format:
             {{
                 "projects": [
                     {{
@@ -890,7 +890,7 @@ class ChatGPTClient:
                         "narratives": ["Smart Contract Platform", "DeFi"],
                         "sentiment_index": 75.5,
                         "popularity_score": 850,
-                        "summary": "以太坊在讨论中主要聚焦于技术升级...",
+                        "summary": "Ethereum discussions mainly focus on technical upgrades...",
                         "confidence_score": 0.95,
                         "total_mentions": 5
                     }}
@@ -904,7 +904,7 @@ class ChatGPTClient:
             """
             
             messages = [
-                {"role": "system", "content": "你是一个专业的加密货币项目分析专家，擅长从推文中识别项目并进行深度分析。"},
+                {"role": "system", "content": "You are a professional cryptocurrency project analysis expert skilled in identifying projects from tweets and conducting in-depth analysis."},
                 {"role": "user", "content": prompt}
             ]
             
@@ -950,35 +950,35 @@ class ChatGPTClient:
             tweets_text = "\n".join([f"- {tweet}" for tweet in tweets_sample])
             
             prompt = f"""
-            请为加密货币项目生成专业总结：
+            Please generate a professional summary for the cryptocurrency project:
 
-            项目信息:
-            - 名称: {project_info.get('name', 'Unknown')}
-            - 符号: {project_info.get('symbol', 'Unknown')}
-            - 分类: {project_info.get('category', 'Unknown')}
-            - 叙事: {', '.join(project_info.get('narratives', []))}
+            Project Information:
+            - Name: {project_info.get('name', 'Unknown')}
+            - Symbol: {project_info.get('symbol', 'Unknown')}
+            - Category: {project_info.get('category', 'Unknown')}
+            - Narratives: {', '.join(project_info.get('narratives', []))}
 
-            相关推文讨论:
+            Related Tweet Discussions:
             {tweets_text}
 
-            请提供项目的社区讨论总结，包括：
-            1. 主要讨论焦点和热点话题
-            2. 社区情感倾向和市场预期
-            3. KOL观点和专业分析
-            4. 项目发展动态和技术进展
-            5. 风险因素和关注点
+            Please provide a community discussion summary for the project, including:
+            1. Main discussion focus and trending topics
+            2. Community sentiment and market expectations
+            3. KOL opinions and professional analysis
+            4. Project development updates and technical progress
+            5. Risk factors and concerns
 
-            要求：
-            - 客观专业的语调
-            - 150-250字以内
-            - 突出项目的独特价值和市场地位
-            - 反映最新的社区讨论趋势
+            Requirements:
+            - Objective and professional tone
+            - 120-150 words
+            - Highlight the project's unique value and market position
+            - Reflect latest community discussion trends
 
-            请直接返回总结文本。
+            Please return the summary text directly.
             """
             
             messages = [
-                {"role": "system", "content": "你是一个专业的加密货币项目分析师，擅长分析项目的社区情绪和市场表现。"},
+                {"role": "system", "content": "You are a professional cryptocurrency project analyst skilled in analyzing project community sentiment and market performance."},
                 {"role": "user", "content": prompt}
             ]
             
@@ -1015,34 +1015,34 @@ class ChatGPTClient:
             tweets_text = "\n".join([f"- {tweet}" for tweet in tweets_sample])
             
             prompt = f"""
-            请分析以下推文对加密货币项目的整体情感倾向：
+            Please analyze the overall sentiment tendency of the following tweets toward the cryptocurrency project:
 
-            推文内容:
+            Tweet Content:
             {tweets_text}
 
-            分析框架：
-            - 积极情感 (70-100分): 看涨预测、技术突破、合作消息、机构采用
-            - 中性情感 (30-70分): 客观分析、技术讨论、中性报道
-            - 消极情感 (0-30分): 看跌预测、风险警告、技术问题、负面消息
+            Analysis Framework:
+            - Positive sentiment (70-100 points): bullish predictions, technical breakthroughs, partnership news, institutional adoption
+            - Neutral sentiment (30-70 points): objective analysis, technical discussion, neutral reporting
+            - Negative sentiment (0-30 points): bearish predictions, risk warnings, technical issues, negative news
 
-            请综合考虑：
-            1. 推文的情感色彩和语调
-            2. 价格预测和市场预期
-            3. 技术发展和项目进展
-            4. 风险因素和担忧
-            5. 社区活跃度和参与度
+            Please consider comprehensively:
+            1. Emotional tone and language of tweets
+            2. Price predictions and market expectations
+            3. Technical development and project progress
+            4. Risk factors and concerns
+            5. Community activity and engagement
 
-            请返回一个0-100的情感指数分数，并简要说明评分理由。
+            Please return a sentiment index score from 0-100 with a brief explanation of the rating.
 
-            格式：
+            Format:
             {{
                 "sentiment_index": 75.5,
-                "reasoning": "整体情感偏积极，主要基于技术进展和市场预期..."
+                "reasoning": "Overall sentiment is positive, mainly based on technical progress and market expectations..."
             }}
             """
             
             messages = [
-                {"role": "system", "content": "你是一个专业的加密货币情感分析专家，擅长量化社区情绪。"},
+                {"role": "system", "content": "You are a professional cryptocurrency sentiment analysis expert skilled in quantifying community sentiment."},
                 {"role": "user", "content": prompt}
             ]
             
@@ -1095,20 +1095,20 @@ class ChatGPTClient:
             tweets_content = "\n".join(tweets_text)
             
             prompt = f"""
-            你是一个专业的加密货币项目分析专家，请从以下推文中识别、分析和分类加密货币项目。
+            You are a professional cryptocurrency project analysis expert. Please identify, analyze and classify cryptocurrency projects from the following tweets.
 
-            推文内容:
+            Tweet content:
             {tweets_content}
 
-            请按照以下规则进行分析：
+            Please analyze according to the following rules:
 
-            1. **项目识别规则**:
-            - 识别完整项目名称（如"Ethereum", "Uniswap"）
-            - 识别代币符号（如"ETH", "UNI", "BTC"）
-            - 识别别名（如"以太坊"、"大饼"、"姨太"）
-            - 确认是真实加密货币项目讨论
+            1. **Project Identification Rules**:
+            - Identify complete project names (e.g., "Ethereum", "Uniswap")
+            - Identify token symbols (e.g., "ETH", "UNI", "BTC")
+            - Identify aliases (e.g., "Ethereum", "Bitcoin", "ETH")
+            - Confirm genuine cryptocurrency project discussions
 
-            2. **项目分类体系**:
+            2. **Project Classification System**:
             - Layer1: Bitcoin, Ethereum, Solana, Cardano
             - Layer2: Arbitrum, Optimism, Polygon, Base  
             - DeFi: Uniswap, AAVE, Compound, MakerDAO
@@ -1119,18 +1119,18 @@ class ChatGPTClient:
             - AI: Fetch.ai, SingularityNET
             - Privacy: Monero, Zcash
 
-            3. **叙事标签体系**:
-            - 技术叙事: "Scalability", "Interoperability", "Privacy"
-            - 应用叙事: "DeFi Summer", "NFT Boom", "GameFi", "RWA"
-            - 生态叙事: "Ethereum Killers", "Multi-chain"
-            - 新兴叙事: "AI+Crypto", "DePin", "Liquid Staking"
+            3. **Narrative Tag System**:
+            - Technical narratives: "Scalability", "Interoperability", "Privacy"
+            - Application narratives: "DeFi Summer", "NFT Boom", "GameFi", "RWA"
+            - Ecosystem narratives: "Ethereum Killers", "Multi-chain"
+            - Emerging narratives: "AI+Crypto", "DePin", "Liquid Staking"
 
-            4. **情感分析框架**:
-            - 积极情感 (70-100分): 看涨、推荐、技术突破
-            - 中性情感 (30-70分): 客观分析、技术讨论
-            - 消极情感 (0-30分): 看跌、风险警告
+            4. **Sentiment Analysis Framework**:
+            - Positive sentiment (70-100 points): bullish, recommendation, technical breakthrough
+            - Neutral sentiment (30-70 points): objective analysis, technical discussion
+            - Negative sentiment (0-30 points): bearish, risk warning
 
-            请返回JSON格式的分析结果：
+            Please return analysis results in JSON format:
             {{
                 "projects": [
                     {{
@@ -1141,7 +1141,7 @@ class ChatGPTClient:
                         "narratives": ["Smart Contract Platform", "DeFi"],
                         "sentiment_index": 75.5,
                         "popularity_score": 850,
-                        "summary": "以太坊在讨论中主要聚焦于技术升级...",
+                        "summary": "Ethereum discussions mainly focus on technical upgrades...",
                         "confidence_score": 0.95,
                         "total_mentions": 5
                     }}
@@ -1155,7 +1155,7 @@ class ChatGPTClient:
             """
             
             messages = [
-                {"role": "system", "content": "你是一个专业的加密货币项目分析专家，擅长从推文中识别项目并进行深度分析。"},
+                {"role": "system", "content": "You are a professional cryptocurrency project analysis expert skilled in identifying projects from tweets and conducting in-depth analysis."},
                 {"role": "user", "content": prompt}
             ]
             
@@ -1201,35 +1201,35 @@ class ChatGPTClient:
             tweets_text = "\n".join([f"- {tweet}" for tweet in tweets_sample])
             
             prompt = f"""
-            请为加密货币项目生成专业总结：
+            Please generate a professional summary for the cryptocurrency project:
 
-            项目信息:
-            - 名称: {project_info.get('name', 'Unknown')}
-            - 符号: {project_info.get('symbol', 'Unknown')}
-            - 分类: {project_info.get('category', 'Unknown')}
-            - 叙事: {', '.join(project_info.get('narratives', []))}
+            Project Information:
+            - Name: {project_info.get('name', 'Unknown')}
+            - Symbol: {project_info.get('symbol', 'Unknown')}
+            - Category: {project_info.get('category', 'Unknown')}
+            - Narratives: {', '.join(project_info.get('narratives', []))}
 
-            相关推文讨论:
+            Related Tweet Discussions:
             {tweets_text}
 
-            请提供项目的社区讨论总结，包括：
-            1. 主要讨论焦点和热点话题
-            2. 社区情感倾向和市场预期
-            3. KOL观点和专业分析
-            4. 项目发展动态和技术进展
-            5. 风险因素和关注点
+            Please provide a community discussion summary for the project, including:
+            1. Main discussion focus and trending topics
+            2. Community sentiment and market expectations
+            3. KOL opinions and professional analysis
+            4. Project development updates and technical progress
+            5. Risk factors and concerns
 
-            要求：
-            - 客观专业的语调
-            - 150-250字以内
-            - 突出项目的独特价值和市场地位
-            - 反映最新的社区讨论趋势
+            Requirements:
+            - Objective and professional tone
+            - 120-150 words
+            - Highlight the project's unique value and market position
+            - Reflect latest community discussion trends
 
-            请直接返回总结文本。
+            Please return the summary text directly.
             """
             
             messages = [
-                {"role": "system", "content": "你是一个专业的加密货币项目分析师，擅长分析项目的社区情绪和市场表现。"},
+                {"role": "system", "content": "You are a professional cryptocurrency project analyst skilled in analyzing project community sentiment and market performance."},
                 {"role": "user", "content": prompt}
             ]
             
@@ -1266,34 +1266,34 @@ class ChatGPTClient:
             tweets_text = "\n".join([f"- {tweet}" for tweet in tweets_sample])
             
             prompt = f"""
-            请分析以下推文对加密货币项目的整体情感倾向：
+            Please analyze the overall sentiment tendency of the following tweets toward the cryptocurrency project:
 
-            推文内容:
+            Tweet Content:
             {tweets_text}
 
-            分析框架：
-            - 积极情感 (70-100分): 看涨预测、技术突破、合作消息、机构采用
-            - 中性情感 (30-70分): 客观分析、技术讨论、中性报道
-            - 消极情感 (0-30分): 看跌预测、风险警告、技术问题、负面消息
+            Analysis Framework:
+            - Positive sentiment (70-100 points): bullish predictions, technical breakthroughs, partnership news, institutional adoption
+            - Neutral sentiment (30-70 points): objective analysis, technical discussion, neutral reporting
+            - Negative sentiment (0-30 points): bearish predictions, risk warnings, technical issues, negative news
 
-            请综合考虑：
-            1. 推文的情感色彩和语调
-            2. 价格预测和市场预期
-            3. 技术发展和项目进展
-            4. 风险因素和担忧
-            5. 社区活跃度和参与度
+            Please consider comprehensively:
+            1. Emotional tone and language of tweets
+            2. Price predictions and market expectations
+            3. Technical development and project progress
+            4. Risk factors and concerns
+            5. Community activity and engagement
 
-            请返回一个0-100的情感指数分数，并简要说明评分理由。
+            Please return a sentiment index score from 0-100 with a brief explanation of the rating.
 
-            格式：
+            Format:
             {{
                 "sentiment_index": 75.5,
-                "reasoning": "整体情感偏积极，主要基于技术进展和市场预期..."
+                "reasoning": "Overall sentiment is positive, mainly based on technical progress and market expectations..."
             }}
             """
             
             messages = [
-                {"role": "system", "content": "你是一个专业的加密货币情感分析专家，擅长量化社区情绪。"},
+                {"role": "system", "content": "You are a professional cryptocurrency sentiment analysis expert skilled in quantifying community sentiment."},
                 {"role": "user", "content": prompt}
             ]
             
