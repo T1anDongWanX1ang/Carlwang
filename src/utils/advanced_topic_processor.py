@@ -119,43 +119,45 @@ class AdvancedTopicProcessor:
         author = tweet_data.get('author', '')
         
         prompt = f"""
-你是一个专业的加密货币topic提取助手。请分析以下KOL推文是否包含重要topic。
+You are a professional cryptocurrency topic extraction assistant. Please analyze the following KOL tweet to determine if it contains important topics.
 
-## topic识别标准
-以下类型的内容应被识别为topic：
-- 项目发布/更新（新币上线、协议升级、产品发布等）
-- 重大合作伙伴关系或投资
-- 监管政策变化
-- 技术突破或漏洞
-- 市场重大波动及其原因
-- 重要人物动态（CEO离职、知名投资者表态等）
-- 交易所上币/下架
-- 黑客攻击或安全事件
+## Topic Identification Standards
+The following types of content should be identified as topics:
+- Project launches/updates (new coin listings, protocol upgrades, product releases, etc.)
+- Major partnerships or investments
+- Regulatory policy changes
+- Technical breakthroughs or vulnerabilities
+- Major market volatility and its causes
+- Important personnel dynamics (CEO departures, prominent investor statements, etc.)
+- Exchange listings/delistings
+- Hacking attacks or security incidents
 
-## 推文信息
-作者: {author}
-内容: {content}
+## Tweet Information
+Author: {author}
+Content: {content}
 
-## 输出要求
-请返回JSON格式，包含以下字段：
-- has_topic: 是否包含重要topic (true/false)
-- topic_name: topic名称（如果has_topic为true）
-- brief: topic简述（如果has_topic为true）
-- key_entities: 相关项目/人物/交易所等，用逗号分隔（如果has_topic为true）
-- topic_type: topic类型（对应上述8种标准之一）
-- confidence: 置信度（0-1之间）
-- reason: 判断理由
+## Output Requirements
+Please return in JSON format with the following fields:
+- has_topic: Whether it contains important topics (true/false)
+- topic_name: Topic name (if has_topic is true) - must be in English
+- brief: Topic brief description (if has_topic is true) - must be in English
+- key_entities: Related projects/people/exchanges etc., comma-separated (if has_topic is true)
+- topic_type: Topic type (corresponding to one of the 8 standards above)
+- confidence: Confidence level (between 0-1)
+- reason: Reasoning for judgment
 
-例如：
+Example:
 {{
   "has_topic": true,
-  "topic_name": "比特币突破65000美元",
-  "brief": "比特币价格创新高，突破65000美元大关",
-  "key_entities": "Bitcoin, BTC, 价格突破",
-  "topic_type": "市场重大波动及其原因",
+  "topic_name": "Bitcoin Breaks Through $65,000",
+  "brief": "Bitcoin price reaches new high, breaking through the $65,000 threshold",
+  "key_entities": "Bitcoin, BTC, price breakthrough",
+  "topic_type": "Major market volatility and its causes",
   "confidence": 0.9,
-  "reason": "明确的价格突破事件，具有重要市场影响"
+  "reason": "Clear price breakthrough event with significant market impact"
 }}
+
+IMPORTANT: All output must be in English, including topic_name and brief fields.
 """
         
         try:
@@ -229,30 +231,30 @@ class AdvancedTopicProcessor:
             相似度计算结果
         """
         prompt = f"""
-你是一个专业的topic相似度判断助手。请判断以下两个topic是否为同一个事件。
+You are a professional topic similarity assessment assistant. Please determine if the following two topics refer to the same event.
 
-## 判断标准
-如果满足以下任一条件，则认为是同一个topic：
-- 主体相同 + topic类型相同 + 时间接近（已在外层确认时间接近）
-- 核心关键词重叠度 ≥ 70%
-- topic本质相同，只是表述不同
+## Assessment Criteria
+The topics are considered the same if any of the following conditions are met:
+- Same subject + same topic type + close timing (time proximity already confirmed at outer level)
+- Core keyword overlap ≥ 70%
+- Topics are essentially the same, just expressed differently
 
 ## Topic 1
-名称: {topic1_name}
-相关实体: {topic1_entities}
-类型: {topic1_type}
+Name: {topic1_name}
+Related entities: {topic1_entities}
+Type: {topic1_type}
 
 ## Topic 2
-名称: {topic2_name}
-相关实体: {topic2_entities}
-简述: {topic2_brief}
+Name: {topic2_name}
+Related entities: {topic2_entities}
+Brief: {topic2_brief}
 
-## 输出要求
-请返回JSON格式：
+## Output Requirements
+Please return in JSON format:
 {{
   "is_similar": true/false,
   "confidence": 0.0-1.0,
-  "reason": "判断理由"
+  "reason": "Assessment reasoning"
 }}
 """
         
