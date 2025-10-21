@@ -23,8 +23,8 @@ class ChatGPTClient:
         self.max_retries = self.chatgpt_config.get('max_retries', 3)
         self.retry_delay = self.chatgpt_config.get('retry_delay', 2)
         
-        # 初始化OpenAI客户端
-        openai.api_key = self.api_key
+        # 延迟初始化OpenAI客户端，避免模块导入时的问题
+        self.client = None
         
         self.logger = logging.getLogger(__name__)
         
@@ -32,6 +32,25 @@ class ChatGPTClient:
         self.request_count = 0
         self.success_count = 0
         self.error_count = 0
+        
+        # 批处理优化配置
+        batch_config = self.chatgpt_config.get('batch_processing', {})
+        opt_config = self.chatgpt_config.get('optimization', {})
+        
+        self.enable_batch_consolidation = opt_config.get('enable_batch_consolidation', True)
+        self.max_prompt_tokens = opt_config.get('max_prompt_tokens', 3000)
+        self.content_merge_threshold = batch_config.get('content_merge_threshold', 2000)
+        
+        # 响应缓存
+        self.enable_response_caching = opt_config.get('enable_response_caching', True)
+        self.response_cache = {} if self.enable_response_caching else None
+        self.cache_ttl_hours = opt_config.get('cache_ttl_hours', 24)
+    
+    def _get_client(self):
+        """获取OpenAI客户端（延迟初始化）"""
+        if self.client is None:
+            self.client = openai.OpenAI(api_key=self.api_key)
+        return self.client
     
     def _make_request(self, messages: List[Dict[str, str]], **kwargs) -> Optional[str]:
         """
@@ -48,7 +67,7 @@ class ChatGPTClient:
             try:
                 self.logger.debug(f"发起ChatGPT请求 (尝试 {attempt + 1}/{self.max_retries})")
                 
-                response = openai.ChatCompletion.create(
+                response = self._get_client().chat.completions.create(
                     model=self.model,
                     messages=messages,
                     timeout=self.timeout,
@@ -64,12 +83,12 @@ class ChatGPTClient:
                 
                 return content
                 
-            except openai.error.RateLimitError:
+            except getattr(openai, 'RateLimitError', Exception):
                 self.logger.warning(f"ChatGPT速率限制，等待 {self.retry_delay} 秒后重试")
                 time.sleep(self.retry_delay * (attempt + 1))
                 continue
                 
-            except openai.error.APIError as e:
+            except getattr(openai, 'APIError', Exception) as e:
                 self.logger.error(f"ChatGPT API错误: {e}")
                 if attempt < self.max_retries - 1:
                     time.sleep(self.retry_delay)
@@ -487,6 +506,225 @@ Output only the above JSON without additional explanation."""
             time.sleep(0.5)
         
         return results
+    
+    def batch_extract_topics_from_tweets(self, tweets: List[str]) -> List[Optional[Dict[str, str]]]:
+        """
+        智能批量话题提取，优化token使用
+        
+        Args:
+            tweets: 推文内容列表
+            
+        Returns:
+            话题信息列表，每个元素对应输入推文的话题信息
+        """
+        if not tweets:
+            return []
+            
+        # 1. 检查缓存
+        cached_results = []
+        uncached_tweets = []
+        uncached_indices = []
+        
+        for i, tweet in enumerate(tweets):
+            cached_result = self._get_cached_response(tweet, 'topic_extraction')
+            if cached_result:
+                cached_results.append((i, cached_result))
+            else:
+                uncached_tweets.append(tweet)
+                uncached_indices.append(i)
+        
+        # 2. 如果没有未缓存的推文，直接返回
+        if not uncached_tweets:
+            results = [None] * len(tweets)
+            for idx, result in cached_results:
+                results[idx] = result
+            return results
+        
+        # 3. 内容去重和合并
+        if self.enable_batch_consolidation and len(uncached_tweets) > 1:
+            batch_results = self._batch_extract_topics_consolidated(uncached_tweets)
+        else:
+            # 逐个处理（旧方式）
+            batch_results = []
+            for tweet in uncached_tweets:
+                result = self.extract_topic_from_tweet(tweet)
+                batch_results.append(result)
+        
+        # 4. 缓存结果
+        for i, result in enumerate(batch_results):
+            if result and self.enable_response_caching:
+                self._cache_response(uncached_tweets[i], 'topic_extraction', result)
+        
+        # 5. 合并缓存和新结果
+        final_results = [None] * len(tweets)
+        for idx, result in cached_results:
+            final_results[idx] = result
+        for i, idx in enumerate(uncached_indices):
+            final_results[idx] = batch_results[i] if i < len(batch_results) else None
+            
+        return final_results
+    
+    def _batch_extract_topics_consolidated(self, tweets: List[str]) -> List[Optional[Dict[str, str]]]:
+        """
+        合并内容进行批量话题提取，减少API调用
+        """
+        try:
+            # 合并相似内容
+            content_groups = self._group_similar_content(tweets)
+            
+            results = [None] * len(tweets)
+            
+            for group_indices, group_tweets in content_groups:
+                if len(group_tweets) == 1:
+                    # 单条推文
+                    result = self.extract_topic_from_tweet(group_tweets[0])
+                    results[group_indices[0]] = result
+                else:
+                    # 批量处理
+                    batch_result = self._extract_topics_from_merged_content(group_tweets)
+                    # 将结果分配给组内所有推文
+                    for idx in group_indices:
+                        results[idx] = batch_result
+            
+            return results
+            
+        except Exception as e:
+            self.logger.error(f"批量话题提取失败: {e}")
+            # 回退到逐个处理
+            return [self.extract_topic_from_tweet(tweet) for tweet in tweets]
+    
+    def _group_similar_content(self, tweets: List[str]) -> List[Tuple[List[int], List[str]]]:
+        """
+        基于内容相似度将推文分组
+        """
+        import hashlib
+        
+        groups = []
+        processed = set()
+        
+        for i, tweet in enumerate(tweets):
+            if i in processed:
+                continue
+                
+            # 简单的相似度检查 - 基于关键词
+            current_group_indices = [i]
+            current_group_tweets = [tweet]
+            processed.add(i)
+            
+            tweet_keywords = set(tweet.lower().split())
+            
+            # 查找相似推文
+            for j, other_tweet in enumerate(tweets[i+1:], i+1):
+                if j in processed:
+                    continue
+                    
+                other_keywords = set(other_tweet.lower().split())
+                # 计算Jaccard相似度
+                intersection = tweet_keywords & other_keywords
+                union = tweet_keywords | other_keywords
+                similarity = len(intersection) / len(union) if union else 0
+                
+                if similarity > 0.3:  # 30%相似度阈值
+                    current_group_indices.append(j)
+                    current_group_tweets.append(other_tweet)
+                    processed.add(j)
+            
+            groups.append((current_group_indices, current_group_tweets))
+        
+        return groups
+    
+    def _extract_topics_from_merged_content(self, tweets: List[str]) -> Optional[Dict[str, str]]:
+        """
+        从合并的推文内容中提取主要话题
+        """
+        try:
+            # 合并内容，限制长度
+            merged_content = "\n---\n".join(tweets[:5])  # 最多5条推文
+            if len(merged_content) > self.content_merge_threshold:
+                merged_content = merged_content[:self.content_merge_threshold] + "..."
+            
+            prompt = f"""
+分析以下多条相关推文，提取共同讨论的主要话题：
+
+推文内容：
+{merged_content}
+
+请识别：
+1. 主要讨论的话题名称
+2. 话题的简要描述
+
+返回格式：
+{{
+  "topic_name": "话题名称",
+  "brief": "简要描述"
+}}
+            """
+            
+            messages = [
+                {"role": "system", "content": "你是一个专业的社交媒体内容分析师，擅长从多条推文中提取核心话题。"},
+                {"role": "user", "content": prompt}
+            ]
+            
+            response = self._make_request(messages, temperature=0.3, max_tokens=200)
+            
+            if response:
+                # 解析JSON响应
+                import json
+                json_start = response.find('{')
+                json_end = response.rfind('}') + 1
+                if json_start >= 0 and json_end > json_start:
+                    json_str = response[json_start:json_end]
+                    result = json.loads(json_str)
+                    return result
+            
+            return None
+            
+        except Exception as e:
+            self.logger.error(f"合并内容话题提取失败: {e}")
+            return None
+    
+    def _get_cached_response(self, content: str, operation: str) -> Optional[Dict[str, Any]]:
+        """
+        获取缓存的响应
+        """
+        if not self.enable_response_caching or not self.response_cache:
+            return None
+            
+        cache_key = f"{operation}:{hash(content)}"
+        cached_item = self.response_cache.get(cache_key)
+        
+        if cached_item:
+            # 检查是否过期
+            from datetime import datetime, timedelta
+            if datetime.now() - cached_item['timestamp'] < timedelta(hours=self.cache_ttl_hours):
+                return cached_item['result']
+            else:
+                # 删除过期缓存
+                del self.response_cache[cache_key]
+        
+        return None
+    
+    def _cache_response(self, content: str, operation: str, result: Dict[str, Any]):
+        """
+        缓存响应结果
+        """
+        if not self.enable_response_caching or not self.response_cache:
+            return
+            
+        from datetime import datetime
+        cache_key = f"{operation}:{hash(content)}"
+        self.response_cache[cache_key] = {
+            'result': result,
+            'timestamp': datetime.now()
+        }
+        
+        # 限制缓存大小，避免内存溢出
+        if len(self.response_cache) > 1000:
+            # 删除最旧的20%缓存项
+            oldest_keys = sorted(self.response_cache.keys(), 
+                               key=lambda k: self.response_cache[k]['timestamp'])[:200]
+            for key in oldest_keys:
+                del self.response_cache[key]
     
     def get_statistics(self) -> Dict[str, Any]:
         """

@@ -28,7 +28,10 @@ class ProjectEngine:
         # 配置参数
         self.chatgpt_config = config.get('chatgpt', {})
         self.enable_project_analysis = self.chatgpt_config.get('enable_project_analysis', True)
-        self.batch_size = self.chatgpt_config.get('batch_size', 20)
+        
+        # 批处理配置
+        batch_config = self.chatgpt_config.get('batch_processing', {})
+        self.batch_size = batch_config.get('project_batch_size', 25)
         
         # 统计信息
         self.analysis_count = 0
@@ -340,4 +343,5 @@ class ProjectEngine:
 
 
 # 全局Project引擎实例
+# 全局项目引擎实例
 project_engine = ProjectEngine() 

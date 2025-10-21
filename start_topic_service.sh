@@ -7,7 +7,7 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PID_FILE="$SCRIPT_DIR/topic_service.pid"
 LOG_FILE="$SCRIPT_DIR/logs/topic_service.log"
 PYTHON_CMD="python3 main.py --mode topic"
-INTERVAL=300  # 5 minutes in seconds
+INTERVAL=900  # 15 minutes in seconds
 
 # Ensure logs directory exists
 mkdir -p "$SCRIPT_DIR/logs"

@@ -30,7 +30,10 @@ class KOLEngine:
         # 配置参数
         self.chatgpt_config = config.get('chatgpt', {})
         self.enable_kol_analysis = self.chatgpt_config.get('enable_kol_analysis', True)
-        self.batch_size = self.chatgpt_config.get('batch_size', 5)  # KOL分析更耗时，减少批次大小
+        
+        # 批处理配置
+        batch_config = self.chatgpt_config.get('batch_processing', {})
+        self.batch_size = batch_config.get('kol_batch_size', 8)  # KOL分析优化后的批次大小
         
         # 统计信息
         self.analysis_count = 0
@@ -357,5 +360,6 @@ class KOLEngine:
         self.logger.info("KOL引擎统计信息已重置")
 
 
+# 全局KOL引擎实例
 # 全局KOL引擎实例
 kol_engine = KOLEngine() 

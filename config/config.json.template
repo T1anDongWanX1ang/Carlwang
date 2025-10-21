@@ -25,7 +25,23 @@
     "timeout": 30,
     "max_retries": 3,
     "retry_delay": 2,
-    "batch_size": 10,
+    "batch_processing": {
+      "topic_batch_size": 20,
+      "kol_batch_size": 8,
+      "project_batch_size": 25,
+      "content_merge_threshold": 2000,
+      "enable_intelligent_grouping": true,
+      "enable_content_deduplication": true,
+      "similarity_threshold": 0.75
+    },
+    "optimization": {
+      "enable_content_filtering": true,
+      "min_engagement_threshold": 5,
+      "enable_response_caching": true,
+      "cache_ttl_hours": 24,
+      "max_prompt_tokens": 3000,
+      "enable_batch_consolidation": true
+    },
     "enable_topic_analysis": true,
     "enable_sentiment_analysis": true,
     "enable_kol_analysis": true,

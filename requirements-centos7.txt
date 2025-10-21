@@ -12,7 +12,7 @@ pymysql>=1.0.0,<1.2.0
 python-dateutil>=2.8.0,<3.0.0
 
 # OpenAI API - 使用稳定版本
-openai>=0.28.0,<1.0.0
+openai>=2.0.0
 
 # SSL/TLS相关 - 兼容旧版OpenSSL
 certifi>=2021.5.25,<2023.0.0

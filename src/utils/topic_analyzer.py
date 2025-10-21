@@ -216,22 +216,76 @@ class TopicAnalyzer:
     
     def _extract_topic_from_tweet_group(self, tweets: List[Tweet]) -> Dict[str, Any]:
         """
-        从推文组提取话题
+        从推文组提取话题（优化版本，使用批量处理）
         """
         try:
-            # 合并推文内容进行批量分析
-            combined_text = "\n".join(tweet.full_text for tweet in tweets if tweet.full_text)
+            if not tweets:
+                return None
+                
+            # 提取推文内容
+            tweet_contents = [tweet.full_text for tweet in tweets if tweet.full_text]
+            if not tweet_contents:
+                return None
             
-            # 使用现有的单推文方法处理第一条推文（简化版本）
-            if tweets:
-                topic_info = self.chatgpt_client.extract_topic_from_tweet(tweets[0].full_text)
-                return topic_info
+            # 使用新的批量话题提取方法
+            batch_results = self.chatgpt_client.batch_extract_topics_from_tweets(tweet_contents)
             
-            return None
+            # 选择最佳结果（优先选择有内容的、高质量的话题）
+            best_result = None
+            best_score = 0
+            
+            for i, result in enumerate(batch_results):
+                if result and result.get('topic_name'):
+                    # 计算话题质量分数
+                    score = self._calculate_topic_quality_score(result, tweets[i] if i < len(tweets) else tweets[0])
+                    if score > best_score:
+                        best_score = score
+                        best_result = result
+            
+            return best_result
             
         except Exception as e:
             self.logger.error(f"推文组话题提取失败: {e}")
+            # 回退到原始方法
+            if tweets:
+                return self.chatgpt_client.extract_topic_from_tweet(tweets[0].full_text)
             return None
+    
+    def _calculate_topic_quality_score(self, topic_info: Dict[str, Any], tweet: Tweet) -> float:
+        """
+        计算话题质量分数，用于选择最佳话题
+        """
+        score = 0.0
+        
+        try:
+            # 基础分数
+            if topic_info.get('topic_name'):
+                score += 1.0
+            if topic_info.get('brief'):
+                score += 0.5
+            
+            # 话题名称质量
+            topic_name = topic_info.get('topic_name', '')
+            if len(topic_name) > 3:  # 避免过短的话题名
+                score += 0.3
+            if not topic_name.startswith('加密货币讨论'):  # 优先非通用话题
+                score += 0.5
+            
+            # 推文互动质量加成
+            if tweet:
+                engagement = (tweet.favorite_count or 0) + (tweet.retweet_count or 0) * 2
+                if engagement > 10:
+                    score += 0.3
+                elif engagement > 50:
+                    score += 0.5
+                elif engagement > 100:
+                    score += 0.8
+            
+            return score
+            
+        except Exception as e:
+            self.logger.debug(f"计算话题质量分数失败: {e}")
+            return 0.0
     
     def _find_similar_topic(self, topic_name: str, existing_topics: List[str]) -> str:
         """

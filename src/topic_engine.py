@@ -28,7 +28,17 @@ class TopicEngine:
         # 配置参数
         self.chatgpt_config = config.get('chatgpt', {})
         self.enable_topic_analysis = self.chatgpt_config.get('enable_topic_analysis', True)
-        self.batch_size = self.chatgpt_config.get('batch_size', 10)
+        
+        # 批处理配置
+        batch_config = self.chatgpt_config.get('batch_processing', {})
+        self.batch_size = batch_config.get('topic_batch_size', 20)
+        self.enable_intelligent_grouping = batch_config.get('enable_intelligent_grouping', True)
+        self.content_merge_threshold = batch_config.get('content_merge_threshold', 2000)
+        
+        # 优化配置
+        opt_config = self.chatgpt_config.get('optimization', {})
+        self.enable_content_filtering = opt_config.get('enable_content_filtering', True)
+        self.min_engagement_threshold = opt_config.get('min_engagement_threshold', 5)
         
         # 统计信息
         self.analysis_count = 0
@@ -73,7 +83,17 @@ class TopicEngine:
             
             self.logger.info(f"获取到 {len(recent_tweets)} 条最近推文")
             
-            # 2. 分批处理推文以控制ChatGPT API调用
+            # 2. 内容预筛选（如果启用）
+            if self.enable_content_filtering:
+                filtered_tweets = self._filter_high_quality_tweets(recent_tweets)
+                self.logger.info(f"预筛选后剩余 {len(filtered_tweets)} 条高质量推文")
+                recent_tweets = filtered_tweets
+                
+                if not recent_tweets:
+                    self.logger.warning("预筛选后没有符合条件的推文")
+                    return True
+            
+            # 3. 分批处理推文以控制ChatGPT API调用
             topics = []
             for i in range(0, len(recent_tweets), self.batch_size):
                 batch_tweets = recent_tweets[i:i + self.batch_size]
@@ -375,6 +395,56 @@ class TopicEngine:
         self.topics_generated = 0
         self.topic_analyzer.chatgpt_client.reset_statistics()
         self.logger.info("话题引擎统计信息已重置")
+    
+    def _filter_high_quality_tweets(self, tweets: List[Tweet]) -> List[Tweet]:
+        """
+        筛选高质量推文，减少不必要的API调用
+        
+        Args:
+            tweets: 原始推文列表
+            
+        Returns:
+            过滤后的高质量推文列表
+        """
+        filtered_tweets = []
+        
+        for tweet in tweets:
+            try:
+                # 1. 互动数量过滤
+                engagement = (tweet.favorite_count or 0) + (tweet.retweet_count or 0) * 2
+                if engagement < self.min_engagement_threshold:
+                    continue
+                
+                # 2. 内容质量过滤
+                if not tweet.full_text or len(tweet.full_text.strip()) < 20:
+                    continue
+                    
+                # 3. 过滤垃圾内容
+                content_lower = tweet.full_text.lower()
+                spam_keywords = ['spam', 'bot', '机器人', '广告', 'ad', 'promotion']
+                if any(keyword in content_lower for keyword in spam_keywords):
+                    continue
+                
+                # 4. 过滤纯转发（没有原创内容）
+                if content_lower.startswith('rt @') and len(tweet.full_text) < 50:
+                    continue
+                
+                # 5. 优先包含加密货币相关关键词的推文
+                crypto_keywords = ['btc', 'bitcoin', 'eth', 'ethereum', 'crypto', 'defi', 'nft', 
+                                 '比特币', '以太坊', '加密', '币', '链', 'blockchain']
+                has_crypto_content = any(keyword in content_lower for keyword in crypto_keywords)
+                
+                if has_crypto_content or engagement > self.min_engagement_threshold * 3:
+                    filtered_tweets.append(tweet)
+                    
+            except Exception as e:
+                self.logger.debug(f"推文筛选失败: {e}")
+                continue
+        
+        # 按互动数排序，优先处理高互动推文
+        filtered_tweets.sort(key=lambda t: (t.favorite_count or 0) + (t.retweet_count or 0) * 2, reverse=True)
+        
+        return filtered_tweets
 
 
 # 全局话题引擎实例

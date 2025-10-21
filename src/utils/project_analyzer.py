@@ -483,4 +483,5 @@ class ProjectAnalyzer:
 
 
 # 全局Project分析器实例
+# 全局项目分析器实例
 project_analyzer = ProjectAnalyzer() 
