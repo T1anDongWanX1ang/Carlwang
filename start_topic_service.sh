@@ -35,7 +35,7 @@ start_service() {
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 LOG_FILE="$SCRIPT_DIR/logs/topic_service.log"
 PYTHON_CMD="python3 main.py --mode topic"
-INTERVAL=300
+INTERVAL=900
 
 run_topic_analysis() {
     echo "$(date '+%Y-%m-%d %H:%M:%S') - Starting topic analysis..." >> "$LOG_FILE"
