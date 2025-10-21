@@ -1,7 +1,7 @@
 #!/bin/bash
 
 # Topic Analysis Service Management Script
-# Executes topic analysis every 5 minutes (python main.py --mode topic)
+# Executes topic analysis every 15 minutes (python main.py --mode topic)
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PID_FILE="$SCRIPT_DIR/topic_service.pid"
@@ -27,7 +27,7 @@ start_service() {
         return 1
     fi
     
-    echo "Starting topic analysis service (every 5 minutes)..."
+    echo "Starting topic analysis service (every 15 minutes)..."
     
     # Create a separate script for the service loop
     cat > "$SCRIPT_DIR/topic_service_loop.sh" << 'EOF'
@@ -48,7 +48,7 @@ run_topic_analysis() {
 
 while true; do
     run_topic_analysis
-    echo "$(date '+%Y-%m-%d %H:%M:%S') - Waiting 5 minutes for next run..." >> "$LOG_FILE"
+    echo "$(date '+%Y-%m-%d %H:%M:%S') - Waiting 15 minutes for next run..." >> "$LOG_FILE"
     sleep $INTERVAL
 done
 EOF
@@ -68,9 +68,9 @@ EOF
     echo "Topic service started with PID $!"
     echo "Logs: $LOG_FILE"
     if [[ "$OSTYPE" == "darwin"* ]]; then
-        echo "Next run: $(date -v+5M '+%Y-%m-%d %H:%M:%S')"
+        echo "Next run: $(date -v+15M '+%Y-%m-%d %H:%M:%S')"
     else
-        echo "Next run: $(date -d '+5 minutes' '+%Y-%m-%d %H:%M:%S')"
+        echo "Next run: $(date -d '+15 minutes' '+%Y-%m-%d %H:%M:%S')"
     fi
 }
 
@@ -123,10 +123,10 @@ status_service() {
             if [ -n "$last_start" ]; then
                 if [[ "$OSTYPE" == "darwin"* ]]; then
                     # macOS date format
-                    next_run=$(date -v+5M "+%Y-%m-%d %H:%M:%S" 2>/dev/null || echo "Unknown")
+                    next_run=$(date -v+15M "+%Y-%m-%d %H:%M:%S" 2>/dev/null || echo "Unknown")
                 else
                     # Linux date format
-                    next_run=$(date -d "$last_start + 5 minutes" "+%Y-%m-%d %H:%M:%S" 2>/dev/null || echo "Unknown")
+                    next_run=$(date -d "$last_start + 15 minutes" "+%Y-%m-%d %H:%M:%S" 2>/dev/null || echo "Unknown")
                 fi
                 echo "Next run: $next_run"
             fi
@@ -179,7 +179,7 @@ case "$1" in
         echo "Usage: $0 {start|stop|restart|status|once|logs [lines]}"
         echo ""
         echo "Commands:"
-        echo "  start    - Start the topic analysis service (every 5 minutes)"
+        echo "  start    - Start the topic analysis service (every 15 minutes)"
         echo "  stop     - Stop the topic analysis service"
         echo "  restart  - Restart the topic analysis service"
         echo "  status   - Check service status and next run time"
