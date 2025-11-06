@@ -287,12 +287,15 @@ class TopicEngine:
             updated_count = 0
             for tweet in related_tweets:
                 # 只更新那些没有topic_id或project_id的推文，避免覆盖已分类的推文
+                # 增强保护：如果推文已有 project_id，绝不覆盖
                 if not tweet.topic_id and not tweet.project_id:
-                    # 更新推文的topic_id
+                    # 更新推文的topic_id，使用双重保护确保不覆盖project_id
                     update_sql = f"""
                     UPDATE {self.tweet_dao.table_name} 
                     SET topic_id = %s, update_time = %s 
-                    WHERE id_str = %s AND (topic_id IS NULL OR topic_id = '') AND (project_id IS NULL OR project_id = '')
+                    WHERE id_str = %s 
+                      AND (topic_id IS NULL OR topic_id = '') 
+                      AND (project_id IS NULL OR project_id = '')
                     """
                     
                     affected_rows = self.tweet_dao.db_manager.execute_update(
@@ -303,6 +306,13 @@ class TopicEngine:
                     if affected_rows > 0:
                         updated_count += 1
                         self.logger.debug(f"推文 {tweet.id_str} 已关联到话题 {topic.topic_id}")
+                    else:
+                        self.logger.debug(f"推文 {tweet.id_str} 未更新（可能已有project_id或topic_id）")
+                else:
+                    if tweet.project_id:
+                        self.logger.debug(f"推文 {tweet.id_str} 已有project_id={tweet.project_id}，跳过话题关联")
+                    if tweet.topic_id:
+                        self.logger.debug(f"推文 {tweet.id_str} 已有topic_id={tweet.topic_id}，跳过话题关联")
             
             self.logger.info(f"成功将 {updated_count} 条推文关联到话题 {topic.topic_name}")
             

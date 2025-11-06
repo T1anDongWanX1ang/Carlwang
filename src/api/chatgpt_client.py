@@ -83,8 +83,9 @@ class ChatGPTClient:
                 
                 return content
                 
-            except getattr(openai, 'RateLimitError', Exception):
+            except getattr(openai, 'RateLimitError', Exception) as e:
                 self.logger.warning(f"ChatGPT速率限制，等待 {self.retry_delay} 秒后重试")
+                self.logger.error(f"RateLimitError详情: {str(e)}")
                 time.sleep(self.retry_delay * (attempt + 1))
                 continue
                 

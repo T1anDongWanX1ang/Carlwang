@@ -1,0 +1,22 @@
+{
+  "user_info": {
+    "id": "1888869534100234240",
+    "username": "0xEkio",
+    "name": "0xEkio",
+    "followers_count": 36
+  },
+  "followers_summary": [],
+  "meta": {
+    "user_id": "1888869534100234240",
+    "username": "0xEkio",
+    "name": "0xEkio",
+    "total_followers_count": 36,
+    "fetched_count": 0,
+    "fetch_time": "2025-10-27T20:05:53.407780",
+    "api_stats": {
+      "total_requests": 2,
+      "error_count": 1,
+      "success_rate": 50.0
+    }
+  }
+}

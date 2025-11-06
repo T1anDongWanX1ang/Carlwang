@@ -1,0 +1,33 @@
+{
+  "user_info": {
+    "name": "0xEkio",
+    "description": "new main",
+    "public_metrics": {
+      "followers_count": 36,
+      "following_count": 17,
+      "tweet_count": 41,
+      "listed_count": 5,
+      "like_count": 70,
+      "media_count": 3
+    },
+    "id": "1888869534100234240",
+    "verified": false,
+    "username": "0xEkio",
+    "profile_image_url": "https://pbs.twimg.com/profile_images/1946893216957304832/24kdPgoH_normal.jpg",
+    "created_at": "2025-02-10T08:36:11.000Z"
+  },
+  "followers": [],
+  "meta": {
+    "user_id": "1888869534100234240",
+    "username": "0xEkio",
+    "name": "0xEkio",
+    "total_followers_count": 36,
+    "fetched_count": 0,
+    "fetch_time": "2025-10-27T20:04:45.011020",
+    "api_stats": {
+      "total_requests": 2,
+      "error_count": 1,
+      "success_rate": 50.0
+    }
+  }
+}
