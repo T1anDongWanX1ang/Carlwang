@@ -16,7 +16,7 @@ from .utils.user_language_integration import UserLanguageIntegration
 from .models.tweet import Tweet
 from .models.user import TwitterUser
 from .topic_engine import topic_engine
-from .kol_engine import kol_engine
+# from .kol_engine import kol_engine  # KOL分析已禁用
 from .project_engine import project_engine
 
 
@@ -31,7 +31,7 @@ class TwitterCrawler:
         self.user_dao = user_dao
         self.data_mapper = data_mapper
         self.topic_engine = topic_engine
-        self.kol_engine = kol_engine
+        # self.kol_engine = kol_engine  # KOL分析已禁用
         self.project_engine = project_engine
         self.tweet_enricher = tweet_enricher
         
@@ -137,18 +137,18 @@ class TwitterCrawler:
                 except Exception as e:
                     self.logger.error(f"话题分析异常: {e}")
                 
-                # 进行KOL分析
-                try:
-                    self.logger.info("开始进行KOL分析...")
-                    kol_success = self.kol_engine.analyze_all_users_as_kols(min_followers=50000, max_users=10)
-                    
-                    if kol_success:
-                        self.logger.info("KOL分析完成")
-                    else:
-                        self.logger.warning("KOL分析失败，但不影响主流程")
-                        
-                except Exception as e:
-                    self.logger.error(f"KOL分析异常: {e}")
+                # KOL分析已禁用
+                # try:
+                #     self.logger.info("开始进行KOL分析...")
+                #     kol_success = self.kol_engine.analyze_all_users_as_kols(min_followers=50000, max_users=10)
+                #     
+                #     if kol_success:
+                #         self.logger.info("KOL分析完成")
+                #     else:
+                #         self.logger.warning("KOL分析失败，但不影响主流程")
+                #         
+                # except Exception as e:
+                #     self.logger.error(f"KOL分析异常: {e}")
                 
                 # 进行项目分析
                 try:
@@ -473,7 +473,7 @@ class TwitterCrawler:
             'database_tweet_count': self.tweet_dao.get_tweet_count(),
             'database_user_count': self.user_dao.get_user_count(),
             'topic_stats': self.topic_engine.get_topic_statistics(),
-            'kol_stats': self.kol_engine.get_kol_statistics(),
+            # 'kol_stats': self.kol_engine.get_kol_statistics(),  # KOL分析已禁用
             'project_stats': self.project_engine.get_project_statistics()
         }
     

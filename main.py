@@ -16,7 +16,7 @@ from src.utils.scheduler import scheduler
 from src.utils.logger import get_logger
 from src.utils.config_manager import config
 from src.topic_engine import topic_engine
-from src.kol_engine import kol_engine
+# from src.kol_engine import kol_engine  # KOL分析已禁用
 from src.project_engine import project_engine
 
 
@@ -27,8 +27,8 @@ def main():
     
     # 命令行参数解析
     parser = argparse.ArgumentParser(description='Twitter数据爬虫')
-    parser.add_argument('--mode', choices=['once', 'schedule', 'test', 'topic', 'kol', 'project'], default='once',
-                       help='运行模式: once=单次执行, schedule=定时调度, test=测试连接, topic=话题分析, kol=KOL分析, project=项目分析')
+    parser.add_argument('--mode', choices=['once', 'schedule', 'test', 'topic', 'project'], default='once',
+                       help='运行模式: once=单次执行, schedule=定时调度, test=测试连接, topic=话题分析, project=项目分析')
     parser.add_argument('--list-id', type=str, help='Twitter列表ID')
     parser.add_argument('--max-pages', type=int, help='最大页数')
     parser.add_argument('--page-size', type=int, help='每页大小')
@@ -57,8 +57,8 @@ def main():
             run_scheduled(args)
         elif args.mode == 'topic':
             run_topic_analysis(args)
-        elif args.mode == 'kol':
-            run_kol_analysis(args)
+        # elif args.mode == 'kol':  # KOL分析已禁用
+        #     run_kol_analysis(args)
         elif args.mode == 'project':
             run_project_analysis(args)
         
@@ -238,46 +238,12 @@ def run_topic_analysis(args):
         sys.exit(1)
 
 
-def run_kol_analysis(args):
-    """运行KOL分析"""
-    logger = get_logger(__name__)
-    
-    logger.info("开始KOL分析模式...")
-    
-    # 分析参数
-    min_followers = 10000  # 最小粉丝数阈值
-    max_users = args.max_pages * (args.page_size or 5) if args.max_pages and args.page_size else 10
-    
-    success = kol_engine.analyze_all_users_as_kols(min_followers=min_followers, max_users=max_users)
-    
-    # 显示分析结果
-    stats = kol_engine.get_kol_statistics()
-    logger.info("=" * 30)
-    logger.info("KOL分析统计:")
-    for key, value in stats.items():
-        if key not in ['type_distribution', 'sentiment_distribution', 'chatgpt_stats']:
-            logger.info(f"{key}: {value}")
-    
-    # 显示识别的KOL
-    from src.database.kol_dao import kol_dao
-    kol_count = kol_dao.get_kol_count()
-    if kol_count > 0:
-        top_kols = kol_dao.get_top_kols_by_influence(limit=3)
-        logger.info("\n顶级KOL:")
-        for i, kol in enumerate(top_kols, 1):
-            from src.database.user_dao import user_dao
-            user = user_dao.get_user_by_id(kol.kol_id)
-            screen_name = user.screen_name if user else "unknown"
-            logger.info(f"{i}. @{screen_name} (类型: {kol.type}, 影响力: {kol.influence_score})")
-    
-    logger.info("=" * 30)
-    
-    if success:
-        logger.info("KOL分析完成")
-        sys.exit(0)
-    else:
-        logger.error("KOL分析失败")
-        sys.exit(1)
+# KOL分析功能已禁用
+# def run_kol_analysis(args):
+#     """运行KOL分析"""
+#     logger = get_logger(__name__)
+#     logger.warning("KOL分析功能已禁用")
+#     sys.exit(0)
 
 
 def run_project_analysis(args):
