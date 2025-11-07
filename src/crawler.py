@@ -51,7 +51,7 @@ class TwitterCrawler:
         self.logger.info("Twitter爬虫初始化完成")
     
     def crawl_tweets(self, list_id: str = None, max_pages: int = None, 
-                    page_size: int = None, hours_limit: int = 8) -> bool:
+                    page_size: int = None, hours_limit: int = 2) -> bool:
         """
         爬取推文数据
         
@@ -59,7 +59,7 @@ class TwitterCrawler:
             list_id: 列表ID，如果不指定则使用配置中的默认值
             max_pages: 最大页数（不超过15页）
             page_size: 每页大小
-            hours_limit: 时间限制（小时），只拉取过去N小时的推文，默认8小时（生产环境使用UTC时间）
+            hours_limit: 时间限制（小时），只拉取过去N小时的推文，默认2小时（生产环境使用UTC时间）
             
         Returns:
             是否成功
@@ -177,7 +177,7 @@ class TwitterCrawler:
             return False
     
     def _fetch_api_data(self, list_id: str = None, max_pages: int = None, 
-                       page_size: int = None, hours_limit: int = 8) -> List[Dict[str, Any]]:
+                       page_size: int = None, hours_limit: int = 2) -> List[Dict[str, Any]]:
         """
         从API获取数据
         

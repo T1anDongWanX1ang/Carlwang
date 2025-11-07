@@ -182,7 +182,7 @@ class TwitterAPIClient:
     def fetch_tweets_with_pagination(self, list_id: str = None, 
                                    max_pages: int = None, 
                                    page_size: int = None,
-                                   hours_limit: int = 8) -> Generator[List[Dict[str, Any]], None, None]:
+                                   hours_limit: int = 2) -> Generator[List[Dict[str, Any]], None, None]:
         """
         获取推文列表（支持分页和时间过滤）
         使用 next_cursor 机制进行真正的分页
@@ -191,7 +191,7 @@ class TwitterAPIClient:
             list_id: 列表ID
             max_pages: 最大页数（默认15页，用于保护）
             page_size: 每页大小（建议值，实际由API返回决定）
-            hours_limit: 时间限制（小时），只拉取过去N小时的推文，默认8小时
+            hours_limit: 时间限制（小时），只拉取过去N小时的推文，默认2小时
             
         Yields:
             每页的推文数据列表
@@ -296,9 +296,9 @@ class TwitterAPIClient:
     def fetch_all_tweets(self, list_id: str = None, 
                         max_pages: int = None, 
                         page_size: int = None,
-                        hours_limit: int = 8) -> List[Dict[str, Any]]:
+                        hours_limit: int = 2) -> List[Dict[str, Any]]:
         """
-        获取所有推文（自动处理分页，最多15页，只拉取过去8小时）
+        获取所有推文（自动处理分页，最多15页，只拉取过去2小时）
         
         Args:
             list_id: 列表ID
