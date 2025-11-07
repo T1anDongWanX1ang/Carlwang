@@ -125,16 +125,16 @@ class TwitterAPIClient:
         
         return None
     
-    def fetch_tweets(self, list_id: str = None, **kwargs) -> List[Dict[str, Any]]:
+    def fetch_tweets(self, list_id: str = None, **kwargs) -> tuple[List[Dict[str, Any]], Optional[str]]:
         """
-        获取推文列表（单页）
+        获取推文列表（单页），返回推文列表和下一页游标
         
         Args:
             list_id: 列表ID，如果不指定则使用默认值
             **kwargs: 其他请求参数
             
         Returns:
-            推文数据列表
+            (推文数据列表, next_cursor)
         """
         endpoint = self.api_config.get('endpoints', {}).get('list_tweets', '/list-tweets')
         # 确保URL正确构建
@@ -152,29 +152,32 @@ class TwitterAPIClient:
         response_data = self._make_request(url, params)
         
         if response_data:
-            # TweetScout API返回格式为: {"tweets": [...]}
+            # TweetScout API返回格式为: {"tweets": [...], "next_cursor": "..."}
             if isinstance(response_data, dict):
+                # 提取 next_cursor（用于分页）
+                next_cursor = response_data.get('next_cursor') or response_data.get('cursor')
+                
                 # 首先尝试 "tweets" 字段
                 tweets = response_data.get('tweets', [])
                 if isinstance(tweets, list):
-                    self.logger.info(f"成功获取 {len(tweets)} 条推文")
-                    return tweets
+                    self.logger.info(f"成功获取 {len(tweets)} 条推文" + (f", next_cursor={next_cursor[:20]}..." if next_cursor else ", 无更多数据"))
+                    return tweets, next_cursor
                 
                 # 然后尝试 "data" 字段（备用）
                 tweets = response_data.get('data', [])
                 if isinstance(tweets, list):
-                    self.logger.info(f"成功获取 {len(tweets)} 条推文")
-                    return tweets
+                    self.logger.info(f"成功获取 {len(tweets)} 条推文" + (f", next_cursor={next_cursor[:20]}..." if next_cursor else ", 无更多数据"))
+                    return tweets, next_cursor
                 
                 # 如果都没有，记录可用字段
                 self.logger.warning(f"响应格式不包含 'tweets' 或 'data' 字段，可用字段: {list(response_data.keys())}")
-                return []
+                return [], None
             elif isinstance(response_data, list):
-                # 直接是推文数组
+                # 直接是推文数组（没有cursor信息）
                 self.logger.info(f"成功获取 {len(response_data)} 条推文")
-                return response_data
+                return response_data, None
         
-        return []
+        return [], None
     
     def fetch_tweets_with_pagination(self, list_id: str = None, 
                                    max_pages: int = None, 
@@ -182,48 +185,49 @@ class TwitterAPIClient:
                                    hours_limit: int = 8) -> Generator[List[Dict[str, Any]], None, None]:
         """
         获取推文列表（支持分页和时间过滤）
+        使用 next_cursor 机制进行真正的分页
         
         Args:
             list_id: 列表ID
-            max_pages: 最大页数（默认15页）
-            page_size: 每页大小
+            max_pages: 最大页数（默认15页，用于保护）
+            page_size: 每页大小（建议值，实际由API返回决定）
             hours_limit: 时间限制（小时），只拉取过去N小时的推文，默认8小时
             
         Yields:
             每页的推文数据列表
         """
-        # 设置最大页数为15
+        # 设置最大页数为15（作为保护机制）
         if max_pages is None:
-            max_pages = 15  # 强制最多15页
+            max_pages = 15
         else:
-            max_pages = min(max_pages, 15)  # 不超过15页
+            max_pages = min(max_pages, 15)
             
         if page_size is None:
             page_size = self.pagination_config.get('page_size', 100)
         
         # 计算时间截止点（过去8小时）
         time_cutoff = datetime.now() - timedelta(hours=hours_limit)
-        self.logger.info(f"时间过滤: 只拉取 {time_cutoff.strftime('%Y-%m-%d %H:%M:%S')} 之后的推文")
+        self.logger.info(f"时间过滤: 只拉取 {time_cutoff.strftime('%Y-%m-%d %H:%M:%S')} 之后的推文（使用cursor分页）")
         
         page = 1
         total_tweets = 0
         filtered_tweets = 0
         stopped_by_time = False
+        cursor = None  # 使用cursor进行分页
         
         while page <= max_pages:
-            self.logger.info(f"获取第 {page} 页数据（最多{max_pages}页），每页 {page_size} 条")
+            self.logger.info(f"获取第 {page} 页数据（最多{max_pages}页保护）" + (f", cursor={cursor[:20]}..." if cursor else ", 首页"))
             
             # 构建分页参数
             params = {}
             if page_size:
                 params['count'] = page_size
             
-            # 根据TweetScout API文档，可能需要cursor而不是page
-            if page > 1:
-                # 这里可能需要根据实际API文档调整分页方式
-                params['page'] = page
+            # 使用cursor进行分页（这是正确的方式）
+            if cursor:
+                params['cursor'] = cursor
             
-            tweets = self.fetch_tweets(list_id=list_id, **params)
+            tweets, next_cursor = self.fetch_tweets(list_id=list_id, **params)
             
             if not tweets:
                 self.logger.info(f"第 {page} 页没有数据，停止分页")
@@ -272,15 +276,20 @@ class TwitterAPIClient:
                 self.logger.info(f"已到达时间边界（{hours_limit}小时前），停止拉取")
                 break
             
-            # 如果返回的数据少于请求的页面大小，说明已经到最后一页
-            if len(tweets) < page_size:
-                self.logger.info("已获取所有数据")
+            # 如果没有 next_cursor，说明已经到最后一页
+            if not next_cursor:
+                self.logger.info("API返回无更多数据（无next_cursor），停止分页")
                 break
             
+            # 更新cursor为下一页
+            cursor = next_cursor
             page += 1
             
             # 页面间延迟
             time.sleep(1)
+        
+        if page > max_pages:
+            self.logger.warning(f"达到最大页数限制（{max_pages}页），可能还有更多数据未拉取")
         
         self.logger.info(f"分页获取完成，总共获取 {total_tweets} 条有效推文（过滤 {filtered_tweets} 条），共 {page-1} 页")
     

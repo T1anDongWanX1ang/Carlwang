@@ -444,7 +444,7 @@ class TwitterCrawler:
             self.logger.info("测试API连接...")
             
             # 尝试获取少量数据
-            test_data = self.api_client.fetch_tweets(count=1)
+            test_data, _ = self.api_client.fetch_tweets(count=1)
             
             success = test_data is not None and len(test_data) >= 0
             
