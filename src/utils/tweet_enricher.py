@@ -16,6 +16,7 @@ from ..models.topic import Topic
 from ..models.project import Project
 from .advanced_topic_processor import advanced_topic_processor
 from .smart_classifier import smart_classifier
+from .token_extractor import token_extractor
 
 
 class TweetEnricher:
@@ -28,7 +29,8 @@ class TweetEnricher:
         self.topic_dao = topic_dao
         self.kol_dao = kol_dao
         self.project_dao = ProjectDAO()
-        
+        self.token_extractor = token_extractor
+
         # 缓存已知的KOL用户ID，避免重复查询
         self._kol_user_cache = {}
         self._refresh_kol_cache()
@@ -109,32 +111,41 @@ class TweetEnricher:
                 # 4.1 情绪分析
                 sentiment = self._analyze_tweet_sentiment(tweet.full_text, use_ai=True)
                 tweet.sentiment = sentiment
-                
+
                 # 4.2 使用智能分类器处理项目和话题
                 classification_result = self._classify_and_set_ids(tweet)
-                
+
                 # 设置相应的ID字段（确保互斥性）
                 if classification_result.content_type == 'project':
                     tweet.project_id = classification_result.project_id
                     tweet.topic_id = None  # 确保topic_id为空
                     tweet.entity_id = classification_result.project_id
+                    # 项目推文不需要提取token_tag
+                    tweet.token_tag = None
                 elif classification_result.content_type == 'topic':
                     tweet.project_id = None  # 确保project_id为空
                     tweet.topic_id = classification_result.topic_id
                     tweet.entity_id = classification_result.topic_id
+                    # 4.3 对于非项目推文，提取token symbols
+                    token_tag = self._extract_token_symbols(tweet.full_text)
+                    tweet.token_tag = token_tag
                 else:
                     # 未知类型，清空所有分类字段
                     tweet.project_id = None
                     tweet.topic_id = None
                     tweet.entity_id = None
-                
-                self.logger.info(f"推文 {tweet.id_str} 增强完成: kol_id={kol_id}, valid={is_valid}, sentiment={sentiment}, project_id={tweet.project_id}, topic_id={tweet.topic_id}, entity_id={tweet.entity_id}, url={tweet_url}")
+                    # 4.3 对于非项目推文，提取token symbols
+                    token_tag = self._extract_token_symbols(tweet.full_text)
+                    tweet.token_tag = token_tag
+
+                self.logger.info(f"推文 {tweet.id_str} 增强完成: kol_id={kol_id}, valid={is_valid}, sentiment={sentiment}, project_id={tweet.project_id}, topic_id={tweet.topic_id}, entity_id={tweet.entity_id}, token_tag={tweet.token_tag}, url={tweet_url}")
             else:
                 # 无效推文不进行话题分析和情绪分析
                 tweet.sentiment = None
                 tweet.entity_id = None
                 tweet.project_id = None
                 tweet.topic_id = None
+                tweet.token_tag = None  # 无效推文也不提取token
                 self.logger.info(f"推文 {tweet.id_str} 标记为无效，kol_id={kol_id}, url={tweet_url}")
             
             return tweet
@@ -553,17 +564,17 @@ class TweetEnricher:
     def _classify_and_set_ids(self, tweet: Tweet):
         """
         使用智能分类器对推文进行分类，并设置project_id和topic_id
-        
+
         Args:
             tweet: 推文对象
-            
+
         Returns:
             ClassificationResult: 分类结果
         """
         try:
             # 使用智能分类器进行分类
             classification_result = smart_classifier.classify_tweet(tweet)
-            
+
             if classification_result.content_type == 'unknown':
                 self.logger.debug(f"推文 {tweet.id_str} 无法分类: {classification_result.reason}")
             elif classification_result.content_type == 'project':
@@ -574,14 +585,51 @@ class TweetEnricher:
                 self.logger.info(f"推文 {tweet.id_str} 识别为话题: {classification_result.entity_name} " +
                                f"(topic_id: {classification_result.topic_id}, " +
                                f"新创建: {classification_result.is_new_created})")
-            
+
             return classification_result
-            
+
         except Exception as e:
             self.logger.error(f"分类推文失败 {tweet.id_str}: {e}")
             # 返回空的分类结果
             from .smart_classifier import ClassificationResult
             return ClassificationResult(content_type='unknown', reason=f"分类出错: {str(e)}")
+
+    def _extract_token_symbols(self, text: str) -> Optional[str]:
+        """
+        从推文文本中提取token symbols
+
+        Args:
+            text: 推文文本
+
+        Returns:
+            提取的token symbol字符串（逗号分隔），如果没有则返回None
+        """
+        try:
+            if not text or len(text.strip()) < 10:
+                return None
+
+            # 1. 使用AI提取token symbols
+            ai_symbols = None
+            try:
+                ai_symbols = self.chatgpt.extract_token_symbols_from_tweet(text)
+                if ai_symbols:
+                    self.logger.debug(f"AI提取到的symbols: {ai_symbols}")
+            except Exception as e:
+                self.logger.warning(f"AI提取token失败，将使用规则提取: {e}")
+
+            # 2. 使用token_extractor验证和规范化
+            token_tag = self.token_extractor.extract_symbols_from_text(text, ai_symbols)
+
+            if token_tag:
+                self.logger.info(f"成功提取token symbols: {token_tag}")
+            else:
+                self.logger.debug("未能提取到有效的token symbols")
+
+            return token_tag
+
+        except Exception as e:
+            self.logger.error(f"提取token symbols失败: {e}")
+            return None
 
 
 # 全局推文增强器实例

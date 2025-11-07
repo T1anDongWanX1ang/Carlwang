@@ -40,6 +40,7 @@ class Tweet:
     sentiment: Optional[str] = None  # 情绪倾向：Positive/Negative/Neutral
     tweet_url: Optional[str] = None  # 推文URL
     link_url: Optional[str] = None  # 提取的链接URL（来自entities字段）
+    token_tag: Optional[str] = None  # Token符号标签（如BTC,ETH，多个用逗号分隔）
     
     def __post_init__(self):
         """初始化后处理"""
@@ -162,7 +163,7 @@ class Tweet:
     def to_dict(self) -> Dict[str, Any]:
         """
         转换为字典格式，用于数据库插入
-        
+
         Returns:
             字典格式的数据
         """
@@ -189,7 +190,8 @@ class Tweet:
             'is_valid': self.is_valid,
             'sentiment': self.sentiment,
             'tweet_url': self.tweet_url,
-            'link_url': getattr(self, 'link_url', None)  # 安全地获取link_url字段
+            'link_url': getattr(self, 'link_url', None),  # 安全地获取link_url字段
+            'token_tag': self.token_tag
         }
     
     def validate(self) -> bool:

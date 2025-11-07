@@ -1585,6 +1585,90 @@ Output only the above JSON without additional explanation."""
         self.success_count = 0
         self.error_count = 0
 
+    def extract_token_symbols_from_tweet(self, tweet_content: str) -> Optional[List[str]]:
+        """
+        从推文中提取加密货币token symbols
+
+        Args:
+            tweet_content: 推文内容
+
+        Returns:
+            提取的token symbol列表（如["BTC", "ETH"]），如果无法提取则返回None
+        """
+        try:
+            prompt = f"""
+            Please analyze the following cryptocurrency-related tweet and extract all mentioned token symbols.
+
+            Tweet content: {tweet_content}
+
+            Please identify:
+            1. All cryptocurrency token symbols mentioned (e.g., BTC, ETH, SOL, USDT)
+            2. Include symbols with $ prefix (e.g., $BTC, $ETH)
+            3. Include full names that can be mapped to symbols (e.g., "Bitcoin" -> BTC, "Ethereum" -> ETH)
+
+            Requirements:
+            - Only extract valid cryptocurrency token symbols (2-10 uppercase letters)
+            - Exclude common words that look like symbols but are not (e.g., "TO", "FOR", "AND")
+            - Return empty list if no valid symbols found
+            - Return at most 10 symbols
+
+            Please return in JSON format:
+            {{"symbols": ["BTC", "ETH", "SOL"]}}
+
+            If no valid symbols found, return:
+            {{"symbols": []}}
+            """
+
+            messages = [
+                {"role": "system", "content": "You are a professional cryptocurrency analyst skilled in identifying token symbols from social media content."},
+                {"role": "user", "content": prompt}
+            ]
+
+            response = self._make_request(
+                messages=messages,
+                temperature=0.1,  # 低温度以获得更确定的结果
+                max_tokens=150
+            )
+
+            if response:
+                try:
+                    # 尝试解析JSON响应
+                    result = json.loads(response.strip())
+
+                    # 验证返回的数据
+                    if isinstance(result, dict) and 'symbols' in result:
+                        symbols = result['symbols']
+
+                        if isinstance(symbols, list):
+                            # 过滤和标准化symbols
+                            filtered_symbols = []
+                            for symbol in symbols:
+                                if isinstance(symbol, str):
+                                    # 移除$前缀并转为大写
+                                    clean_symbol = symbol.strip().upper().lstrip('$')
+                                    # 验证长度
+                                    if 2 <= len(clean_symbol) <= 10:
+                                        filtered_symbols.append(clean_symbol)
+
+                            # 去重并限制数量
+                            unique_symbols = list(set(filtered_symbols))[:10]
+
+                            if unique_symbols:
+                                self.logger.debug(f"提取到token symbols: {unique_symbols}")
+                                return unique_symbols
+                            else:
+                                return None
+
+                except json.JSONDecodeError:
+                    self.logger.warning(f"ChatGPT返回的不是有效JSON: {response}")
+                    return None
+
+            return None
+
+        except Exception as e:
+            self.logger.error(f"提取token symbols失败: {e}")
+            return None
+
 
 # 全局ChatGPT客户端实例
 chatgpt_client = ChatGPTClient() 
