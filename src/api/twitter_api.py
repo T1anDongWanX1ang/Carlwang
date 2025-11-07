@@ -6,6 +6,8 @@ import requests
 import time
 import logging
 from typing import Dict, Any, List, Optional, Generator
+from datetime import datetime, timedelta
+from dateutil import parser as date_parser
 
 from ..utils.config_manager import config
 
@@ -176,28 +178,40 @@ class TwitterAPIClient:
     
     def fetch_tweets_with_pagination(self, list_id: str = None, 
                                    max_pages: int = None, 
-                                   page_size: int = None) -> Generator[List[Dict[str, Any]], None, None]:
+                                   page_size: int = None,
+                                   hours_limit: int = 8) -> Generator[List[Dict[str, Any]], None, None]:
         """
-        获取推文列表（支持分页）
+        获取推文列表（支持分页和时间过滤）
         
         Args:
             list_id: 列表ID
-            max_pages: 最大页数
+            max_pages: 最大页数（默认15页）
             page_size: 每页大小
+            hours_limit: 时间限制（小时），只拉取过去N小时的推文，默认8小时
             
         Yields:
             每页的推文数据列表
         """
+        # 设置最大页数为15
         if max_pages is None:
-            max_pages = self.pagination_config.get('max_pages', 10)
+            max_pages = 15  # 强制最多15页
+        else:
+            max_pages = min(max_pages, 15)  # 不超过15页
+            
         if page_size is None:
             page_size = self.pagination_config.get('page_size', 100)
         
+        # 计算时间截止点（过去8小时）
+        time_cutoff = datetime.now() - timedelta(hours=hours_limit)
+        self.logger.info(f"时间过滤: 只拉取 {time_cutoff.strftime('%Y-%m-%d %H:%M:%S')} 之后的推文")
+        
         page = 1
         total_tweets = 0
+        filtered_tweets = 0
+        stopped_by_time = False
         
         while page <= max_pages:
-            self.logger.info(f"获取第 {page} 页数据，每页 {page_size} 条")
+            self.logger.info(f"获取第 {page} 页数据（最多{max_pages}页），每页 {page_size} 条")
             
             # 构建分页参数
             params = {}
@@ -215,10 +229,48 @@ class TwitterAPIClient:
                 self.logger.info(f"第 {page} 页没有数据，停止分页")
                 break
             
-            total_tweets += len(tweets)
-            self.logger.info(f"第 {page} 页获取到 {len(tweets)} 条推文，累计 {total_tweets} 条")
+            # 过滤推文：只保留过去8小时内的
+            valid_tweets = []
+            for tweet in tweets:
+                try:
+                    # 尝试解析 created_at 字段
+                    created_at_str = tweet.get('created_at', '')
+                    if created_at_str:
+                        # 使用 dateutil 解析各种格式的日期
+                        tweet_time = date_parser.parse(created_at_str)
+                        # 移除时区信息以便比较
+                        if tweet_time.tzinfo:
+                            tweet_time = tweet_time.replace(tzinfo=None)
+                        
+                        # 检查是否在时间范围内
+                        if tweet_time >= time_cutoff:
+                            valid_tweets.append(tweet)
+                        else:
+                            # 推文太旧，停止拉取
+                            filtered_tweets += 1
+                            self.logger.debug(f"推文时间 {tweet_time} 超过{hours_limit}小时限制，停止拉取")
+                            stopped_by_time = True
+                            break
+                    else:
+                        # 如果没有 created_at 字段，保留该推文
+                        valid_tweets.append(tweet)
+                        self.logger.warning(f"推文缺少 created_at 字段，已保留: {tweet.get('id_str', 'unknown')}")
+                        
+                except Exception as e:
+                    # 解析失败，保留该推文
+                    self.logger.warning(f"解析推文时间失败，已保留: {e}")
+                    valid_tweets.append(tweet)
             
-            yield tweets
+            total_tweets += len(valid_tweets)
+            self.logger.info(f"第 {page} 页获取到 {len(tweets)} 条推文，过滤后 {len(valid_tweets)} 条，累计 {total_tweets} 条有效推文")
+            
+            if valid_tweets:
+                yield valid_tweets
+            
+            # 如果因为时间过滤停止，直接退出
+            if stopped_by_time:
+                self.logger.info(f"已到达时间边界（{hours_limit}小时前），停止拉取")
+                break
             
             # 如果返回的数据少于请求的页面大小，说明已经到最后一页
             if len(tweets) < page_size:
@@ -230,18 +282,20 @@ class TwitterAPIClient:
             # 页面间延迟
             time.sleep(1)
         
-        self.logger.info(f"分页获取完成，总共获取 {total_tweets} 条推文，共 {page-1} 页")
+        self.logger.info(f"分页获取完成，总共获取 {total_tweets} 条有效推文（过滤 {filtered_tweets} 条），共 {page-1} 页")
     
     def fetch_all_tweets(self, list_id: str = None, 
                         max_pages: int = None, 
-                        page_size: int = None) -> List[Dict[str, Any]]:
+                        page_size: int = None,
+                        hours_limit: int = 8) -> List[Dict[str, Any]]:
         """
-        获取所有推文（自动处理分页）
+        获取所有推文（自动处理分页，最多15页，只拉取过去8小时）
         
         Args:
             list_id: 列表ID
-            max_pages: 最大页数
+            max_pages: 最大页数（不超过15页）
             page_size: 每页大小
+            hours_limit: 时间限制（小时），默认8小时
             
         Returns:
             所有推文数据列表
@@ -252,7 +306,8 @@ class TwitterAPIClient:
             for page_tweets in self.fetch_tweets_with_pagination(
                 list_id=list_id, 
                 max_pages=max_pages, 
-                page_size=page_size
+                page_size=page_size,
+                hours_limit=hours_limit
             ):
                 all_tweets.extend(page_tweets)
                 

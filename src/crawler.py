@@ -51,14 +51,15 @@ class TwitterCrawler:
         self.logger.info("Twitter爬虫初始化完成")
     
     def crawl_tweets(self, list_id: str = None, max_pages: int = None, 
-                    page_size: int = None) -> bool:
+                    page_size: int = None, hours_limit: int = 8) -> bool:
         """
         爬取推文数据
         
         Args:
             list_id: 列表ID，如果不指定则使用配置中的默认值
-            max_pages: 最大页数
+            max_pages: 最大页数（不超过15页）
             page_size: 每页大小
+            hours_limit: 时间限制（小时），只拉取过去N小时的推文，默认8小时
             
         Returns:
             是否成功
@@ -67,10 +68,10 @@ class TwitterCrawler:
         self.last_crawl_time = datetime.now()
         
         try:
-            self.logger.info(f"开始爬取推文数据 (第 {self.crawl_count} 次)")
+            self.logger.info(f"开始爬取推文数据 (第 {self.crawl_count} 次，时间限制: {hours_limit}小时)")
             
-            # 1. 从API获取数据
-            api_data_list = self._fetch_api_data(list_id, max_pages, page_size)
+            # 1. 从API获取数据（最多15页，只拉取过去8小时）
+            api_data_list = self._fetch_api_data(list_id, max_pages, page_size, hours_limit)
             
             if not api_data_list:
                 self.logger.warning("未获取到任何API数据")
@@ -176,14 +177,15 @@ class TwitterCrawler:
             return False
     
     def _fetch_api_data(self, list_id: str = None, max_pages: int = None, 
-                       page_size: int = None) -> List[Dict[str, Any]]:
+                       page_size: int = None, hours_limit: int = 8) -> List[Dict[str, Any]]:
         """
         从API获取数据
         
         Args:
             list_id: 列表ID
-            max_pages: 最大页数
+            max_pages: 最大页数（不超过15页）
             page_size: 每页大小
+            hours_limit: 时间限制（小时），只拉取过去N小时的推文
             
         Returns:
             API数据列表
@@ -193,13 +195,14 @@ class TwitterCrawler:
             if list_id is None:
                 list_id = config.get('api.default_params.list_id')
             
-            self.logger.info(f"正在从API获取数据，list_id: {list_id}")
+            self.logger.info(f"正在从API获取数据，list_id: {list_id}, 时间限制: {hours_limit}小时")
             
-            # 获取所有推文数据
+            # 获取所有推文数据（最多15页，只拉取过去8小时）
             api_data_list = self.api_client.fetch_all_tweets(
                 list_id=list_id,
                 max_pages=max_pages,
-                page_size=page_size
+                page_size=page_size,
+                hours_limit=hours_limit
             )
             
             # 获取API请求统计
