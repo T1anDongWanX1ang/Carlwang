@@ -14,7 +14,6 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 from src.database.connection import db_manager
 from src.utils.smart_classifier import SmartClassifier
-from src.api.chatgpt_client import ChatGPTClient
 
 
 # 配置日志
@@ -29,19 +28,20 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 
-def get_tweets_from_last_week(limit: int = None) -> List[Dict[str, Any]]:
+def get_tweets_from_last_days(days: int = 7, limit: int = None) -> List[Dict[str, Any]]:
     """
-    获取过去一周的推文数据
+    获取过去N天的推文数据
 
     Args:
+        days: 回溯天数
         limit: 限制返回数量，None表示不限制
 
     Returns:
         推文数据列表
     """
     try:
-        # 计算一周前的时间
-        one_week_ago = datetime.now() - timedelta(days=7)
+        # 计算N天前的时间
+        start_time = datetime.now() - timedelta(days=days)
 
         # 查询推文（只查询有效推文，且有full_text的）
         sql = """
@@ -63,9 +63,9 @@ def get_tweets_from_last_week(limit: int = None) -> List[Dict[str, Any]]:
         if limit:
             sql += f" LIMIT {limit}"
 
-        results = db_manager.execute_query(sql, (one_week_ago,))
+        results = db_manager.execute_query(sql, (start_time,))
 
-        logger.info(f"查询到 {len(results)} 条推文（过去7天）")
+        logger.info(f"查询到 {len(results)} 条推文（过去{days}天）")
         return results
 
     except Exception as e:
@@ -169,8 +169,7 @@ def backfill_project_tags(tweets: List[Dict[str, Any]], batch_size: int = 50) ->
     Returns:
         统计信息字典
     """
-    chatgpt_client = ChatGPTClient()
-    classifier = SmartClassifier(chatgpt_client)
+    classifier = SmartClassifier()
 
     stats = {
         'total': len(tweets),
@@ -272,7 +271,7 @@ def main():
     logger.info("=" * 80)
 
     # 获取推文数据
-    tweets = get_tweets_from_last_week(limit=args.limit)
+    tweets = get_tweets_from_last_days(days=args.days, limit=args.limit)
 
     if not tweets:
         logger.warning("没有找到需要处理的推文")
