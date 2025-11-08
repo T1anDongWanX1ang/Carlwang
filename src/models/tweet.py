@@ -43,7 +43,8 @@ class Tweet:
     token_tag: Optional[str] = None  # Token符号标签（如BTC,ETH，多个用逗号分隔）
     project_tag: Optional[str] = None  # 项目标签（匹配RootData的项目名称）
     is_announce: Optional[int] = 0  # 是否为重要公告（0=否，1=是）
-    
+    summary: Optional[str] = None  # AI总结（针对公告推文的简洁总结）
+
     def __post_init__(self):
         """初始化后处理"""
         # 解析创建时间
@@ -195,7 +196,8 @@ class Tweet:
             'link_url': getattr(self, 'link_url', None),  # 安全地获取link_url字段
             'token_tag': self.token_tag,
             'project_tag': self.project_tag,
-            'is_announce': self.is_announce
+            'is_announce': self.is_announce,
+            'summary': self.summary
         }
     
     def validate(self) -> bool:

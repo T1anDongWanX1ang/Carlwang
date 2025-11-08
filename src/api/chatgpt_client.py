@@ -1738,6 +1738,67 @@ If the tweet does NOT match any category, return:
             self.logger.error(f"判断公告类型失败: {e}")
             return 0
 
+    def summarize_announcement(self, tweet_content: str) -> Optional[str]:
+        """
+        Generate a concise announcement summary from a tweet (max 50 characters in Chinese or 50 words in English)
+
+        Args:
+            tweet_content: Original tweet content
+
+        Returns:
+            Concise announcement-style summary, or None if failed
+        """
+        try:
+            prompt = f"""
+You are a professional crypto project announcement editor. Your task is to transform the following tweet into a concise, professional announcement summary.
+
+Original tweet: {tweet_content}
+
+Requirements:
+1. Rewrite the tweet to sound like an official announcement rather than a casual social media post
+2. Keep it concise: maximum 50 characters in Chinese OR 50 words in English
+3. Focus on the key announcement content (what is happening, when, who is involved)
+4. Use professional and formal tone
+5. Remove casual language, emojis, and unnecessary details
+6. Preserve important information like dates, partner names, event names, or technical updates
+
+Return ONLY the summary text without any additional explanation or formatting.
+
+Example:
+Input: "🎉 Excited to announce our partnership with @ABC! This is huge for our ecosystem! Stay tuned for more details 🚀"
+Output: "Partnership announced with ABC to expand ecosystem capabilities"
+
+Now generate the summary:
+"""
+
+            messages = [
+                {"role": "system", "content": "You are a professional crypto announcement editor skilled in creating concise, formal summaries from social media posts."},
+                {"role": "user", "content": prompt}
+            ]
+
+            response = self._make_request(
+                messages=messages,
+                temperature=0.3,  # Moderate temperature for professional yet concise output
+                max_tokens=100    # Limit tokens to ensure conciseness
+            )
+
+            if response:
+                summary = response.strip()
+
+                # Validate length (rough check)
+                if len(summary) > 0:
+                    self.logger.info(f"Generated announcement summary: {summary[:100]}...")
+                    return summary
+                else:
+                    self.logger.warning("Generated summary is empty")
+                    return None
+
+            return None
+
+        except Exception as e:
+            self.logger.error(f"Failed to generate announcement summary: {e}")
+            return None
+
 
 # 全局ChatGPT客户端实例
 chatgpt_client = ChatGPTClient() 

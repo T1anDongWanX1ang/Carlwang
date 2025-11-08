@@ -21,22 +21,22 @@ class TweetDAO:
     def insert_tweet(self, tweet: Tweet) -> bool:
         """
         插入单条推文数据
-        
+
         Args:
             tweet: 推文对象
-            
+
         Returns:
             是否插入成功
         """
         if not tweet.validate():
             self.logger.error(f"推文数据验证失败: {tweet}")
             return False
-        
+
         # 跳过 is_valid=0 的推文
         if tweet.is_valid == 0:
             self.logger.info(f"跳过存储 is_valid=0 的推文: {tweet.id_str}")
             return False
-        
+
         try:
             # 包含所有字段（包括新增的project_id、topic_id等）
             sql = f"""
@@ -45,9 +45,9 @@ class TweetDAO:
                 full_text, created_at, created_at_datetime,
                 bookmark_count, favorite_count, quote_count, reply_count,
                 retweet_count, view_count, engagement_total, update_time,
-                kol_id, entity_id, project_id, topic_id, is_valid, sentiment, tweet_url, link_url, token_tag, project_tag, is_announce
+                kol_id, entity_id, project_id, topic_id, is_valid, sentiment, tweet_url, link_url, token_tag, project_tag, is_announce, summary
             ) VALUES (
-                %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s
+                %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s
             )
             """
 
@@ -77,7 +77,8 @@ class TweetDAO:
                 tweet_data.get('link_url'),  # 使用get方法以防字段不存在
                 tweet_data.get('token_tag'),
                 tweet_data.get('project_tag'),
-                tweet_data.get('is_announce', 0)  # 默认为0
+                tweet_data.get('is_announce', 0),  # 默认为0
+                tweet_data.get('summary')  # 公告总结
             )
             
             affected_rows = self.db_manager.execute_update(sql, params)
@@ -97,22 +98,22 @@ class TweetDAO:
     def upsert_tweet(self, tweet: Tweet) -> bool:
         """
         插入或更新推文数据（Doris Unique Key模型自动处理重复数据）
-        
+
         Args:
             tweet: 推文对象
-            
+
         Returns:
             是否操作成功
         """
         if not tweet.validate():
             self.logger.error(f"推文数据验证失败: {tweet}")
             return False
-        
+
         # 跳过 is_valid=0 的推文
         if tweet.is_valid == 0:
             self.logger.info(f"跳过存储 is_valid=0 的推文: {tweet.id_str}")
             return False
-        
+
         try:
             # 包含所有字段（包括新增的project_id、topic_id等）
             sql = f"""
@@ -121,9 +122,9 @@ class TweetDAO:
                 full_text, created_at, created_at_datetime,
                 bookmark_count, favorite_count, quote_count, reply_count,
                 retweet_count, view_count, engagement_total, update_time,
-                kol_id, entity_id, project_id, topic_id, is_valid, sentiment, tweet_url, link_url, token_tag, project_tag, is_announce
+                kol_id, entity_id, project_id, topic_id, is_valid, sentiment, tweet_url, link_url, token_tag, project_tag, is_announce, summary
             ) VALUES (
-                %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s
+                %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s
             )
             """
 
@@ -153,7 +154,8 @@ class TweetDAO:
                 tweet_data.get('link_url'),  # 使用get方法以防字段不存在
                 tweet_data.get('token_tag'),
                 tweet_data.get('project_tag'),
-                tweet_data.get('is_announce', 0)  # 默认为0
+                tweet_data.get('is_announce', 0),  # 默认为0
+                tweet_data.get('summary')  # 公告总结
             )
             
             affected_rows = self.db_manager.execute_update(sql, params)
@@ -202,9 +204,9 @@ class TweetDAO:
                 full_text, created_at, created_at_datetime,
                 bookmark_count, favorite_count, quote_count, reply_count,
                 retweet_count, view_count, engagement_total, update_time,
-                kol_id, entity_id, project_id, topic_id, is_valid, sentiment, tweet_url, link_url, token_tag, project_tag, is_announce
+                kol_id, entity_id, project_id, topic_id, is_valid, sentiment, tweet_url, link_url, token_tag, project_tag, is_announce, summary
             ) VALUES (
-                %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s
+                %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s
             )
             """
 
@@ -235,7 +237,10 @@ class TweetDAO:
                         tweet_data['sentiment'],
                         tweet_data['tweet_url'],
                         tweet_data.get('link_url'),  # 使用get方法以防字段不存在
-                        tweet_data.get('token_tag')
+                        tweet_data.get('token_tag'),
+                        tweet_data.get('project_tag'),
+                        tweet_data.get('is_announce', 0),  # 默认为0
+                        tweet_data.get('summary')  # 公告总结
                     )
                     
                     affected_rows = self.db_manager.execute_update(sql, params)

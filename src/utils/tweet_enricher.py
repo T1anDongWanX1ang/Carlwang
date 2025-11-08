@@ -145,6 +145,12 @@ class TweetEnricher:
                 is_announce = self._classify_announcement(tweet.full_text)
                 tweet.is_announce = is_announce
 
+                # 4.5 对于公告推文，生成AI总结
+                if is_announce == 1:
+                    announce_summary = self._generate_announcement_summary(tweet.full_text)
+                    tweet.summary = announce_summary
+                    self.logger.info(f"推文 {tweet.id_str} 公告总结: {announce_summary}")
+
                 self.logger.info(f"推文 {tweet.id_str} 增强完成: kol_id={kol_id}, valid={is_valid}, sentiment={sentiment}, project_id={tweet.project_id}, topic_id={tweet.topic_id}, entity_id={tweet.entity_id}, project_tag={tweet.project_tag}, token_tag={tweet.token_tag}, is_announce={tweet.is_announce}, url={tweet_url}")
             else:
                 # 无效推文不进行话题分析和情绪分析
@@ -667,6 +673,34 @@ class TweetEnricher:
         except Exception as e:
             self.logger.error(f"判断公告失败: {e}")
             return 0
+
+    def _generate_announcement_summary(self, text: str) -> Optional[str]:
+        """
+        为公告推文生成AI总结
+
+        Args:
+            text: 推文文本
+
+        Returns:
+            公告总结文本，失败则返回None
+        """
+        try:
+            if not text or len(text.strip()) < 10:
+                return None
+
+            # 使用ChatGPT生成公告总结
+            summary = self.chatgpt.summarize_announcement(text)
+
+            if summary:
+                self.logger.info(f"成功生成公告总结: {summary}")
+                return summary
+            else:
+                self.logger.warning(f"公告总结生成失败，返回None")
+                return None
+
+        except Exception as e:
+            self.logger.error(f"生成公告总结失败: {e}")
+            return None
 
 
 # 全局推文增强器实例
