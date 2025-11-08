@@ -73,14 +73,19 @@ def setup_logger(name: Optional[str] = None) -> logging.Logger:
         # 抑制OpenAI的详细debug日志
         openai_logger = logging.getLogger('openai')
         openai_logger.setLevel(logging.WARNING)
-        
+
         # 抑制urllib3的详细debug日志
         urllib3_logger = logging.getLogger('urllib3')
         urllib3_logger.setLevel(logging.WARNING)
-        
+
         # 抑制其他可能的verbose日志
         logging.getLogger('urllib3.connectionpool').setLevel(logging.WARNING)
         logging.getLogger('urllib3.util.retry').setLevel(logging.WARNING)
+
+        # 抑制httpcore和httpx的详细HTTP请求日志
+        logging.getLogger('httpcore').setLevel(logging.WARNING)
+        logging.getLogger('httpcore.http11').setLevel(logging.WARNING)
+        logging.getLogger('httpx').setLevel(logging.WARNING)
     
     return logger
 

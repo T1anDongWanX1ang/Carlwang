@@ -41,6 +41,8 @@ class Tweet:
     tweet_url: Optional[str] = None  # 推文URL
     link_url: Optional[str] = None  # 提取的链接URL（来自entities字段）
     token_tag: Optional[str] = None  # Token符号标签（如BTC,ETH，多个用逗号分隔）
+    project_tag: Optional[str] = None  # 项目标签（匹配RootData的项目名称）
+    is_announce: Optional[int] = 0  # 是否为重要公告（0=否，1=是）
     
     def __post_init__(self):
         """初始化后处理"""
@@ -191,7 +193,9 @@ class Tweet:
             'sentiment': self.sentiment,
             'tweet_url': self.tweet_url,
             'link_url': getattr(self, 'link_url', None),  # 安全地获取link_url字段
-            'token_tag': self.token_tag
+            'token_tag': self.token_tag,
+            'project_tag': self.project_tag,
+            'is_announce': self.is_announce
         }
     
     def validate(self) -> bool:

@@ -14,6 +14,7 @@ from src.models.project import Project
 from src.database.topic_dao import topic_dao
 from src.database.project_dao import ProjectDAO
 from src.api.chatgpt_client import chatgpt_client
+from src.utils.rootdata_project_matcher import rootdata_project_matcher
 
 
 @dataclass
@@ -23,6 +24,7 @@ class ClassificationResult:
     project_id: Optional[str] = None
     topic_id: Optional[str] = None
     entity_name: str = ""
+    project_tag: Optional[str] = None  # 匹配到的RootData项目名称
     confidence: float = 0.0
     reason: str = ""
     is_new_created: bool = False
@@ -35,7 +37,8 @@ class SmartClassifier:
         self.logger = logging.getLogger(__name__)
         self.project_dao = ProjectDAO()
         self.topic_dao = topic_dao
-        
+        self.rootdata_matcher = rootdata_project_matcher
+
         # 分类置信度阈值
         self.confidence_threshold = 0.7
     
@@ -179,64 +182,77 @@ class SmartClassifier:
             return None
     
     def _handle_project_classification(
-        self, 
-        project_name: str, 
+        self,
+        project_name: str,
         classification: Dict[str, Any],
         tweet_id: str
     ) -> ClassificationResult:
         """
         处理项目分类结果
-        
+
         Args:
             project_name: 项目名称
             classification: 分类结果
             tweet_id: 推文ID
-            
+
         Returns:
             ClassificationResult
         """
         try:
-            # 标准化项目名称
-            normalized_name = self._normalize_project_name(project_name)
-            
-            # 查找现有项目
-            existing_project = self.project_dao.get_project_by_name(normalized_name)
-            
+            # 1. 使用RootData匹配器匹配项目名称
+            matched_project_name = self.rootdata_matcher.match_project_name(project_name)
+
+            if matched_project_name:
+                self.logger.info(f"推文 {tweet_id} 匹配到RootData项目: {project_name} -> {matched_project_name}")
+                # 使用匹配到的RootData项目名称
+                final_project_name = matched_project_name
+                project_tag = matched_project_name
+            else:
+                # 如果没有匹配到RootData项目，使用AI识别的名称
+                self.logger.debug(f"推文 {tweet_id} 未匹配到RootData项目，使用AI识别名称: {project_name}")
+                final_project_name = self._normalize_project_name(project_name)
+                project_tag = None
+
+            # 2. 查找现有项目（使用最终的项目名称）
+            existing_project = self.project_dao.get_project_by_name(final_project_name)
+
             if existing_project:
                 # 找到现有项目
-                self.logger.debug(f"推文 {tweet_id} 匹配到现有项目: {normalized_name}")
+                self.logger.debug(f"推文 {tweet_id} 匹配到现有项目: {final_project_name}")
                 return ClassificationResult(
                     content_type='project',
                     project_id=existing_project.project_id,
-                    entity_name=normalized_name,
+                    entity_name=final_project_name,
+                    project_tag=project_tag,
                     confidence=classification.get('confidence', 0.8),
-                    reason=f"匹配到现有项目: {normalized_name}",
+                    reason=f"匹配到现有项目: {final_project_name}",
                     is_new_created=False
                 )
             else:
                 # 创建新项目
                 new_project_id = self._create_new_project(
-                    normalized_name, 
+                    final_project_name,
                     classification.get('brief', '')
                 )
-                
+
                 if new_project_id:
-                    self.logger.info(f"推文 {tweet_id} 创建新项目: {normalized_name}")
+                    self.logger.info(f"推文 {tweet_id} 创建新项目: {final_project_name}")
                     return ClassificationResult(
                         content_type='project',
                         project_id=new_project_id,
-                        entity_name=normalized_name,
+                        entity_name=final_project_name,
+                        project_tag=project_tag,
                         confidence=classification.get('confidence', 0.8),
-                        reason=f"创建新项目: {normalized_name}",
+                        reason=f"创建新项目: {final_project_name}",
                         is_new_created=True
                     )
                 else:
-                    self.logger.error(f"创建新项目失败: {normalized_name}")
+                    self.logger.error(f"创建新项目失败: {final_project_name}")
                     return ClassificationResult(
                         content_type='unknown',
-                        reason=f"创建新项目失败: {normalized_name}"
+                        reason=f"创建新项目失败: {final_project_name}"
                     )
-                    
+
         except Exception as e:
             self.logger.error(f"处理项目分类失败: {e}")
             return ClassificationResult(

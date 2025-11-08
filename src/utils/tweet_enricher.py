@@ -120,12 +120,14 @@ class TweetEnricher:
                     tweet.project_id = classification_result.project_id
                     tweet.topic_id = None  # 确保topic_id为空
                     tweet.entity_id = classification_result.project_id
+                    tweet.project_tag = classification_result.project_tag  # 设置RootData匹配的项目名称
                     # 项目推文不需要提取token_tag
                     tweet.token_tag = None
                 elif classification_result.content_type == 'topic':
                     tweet.project_id = None  # 确保project_id为空
                     tweet.topic_id = classification_result.topic_id
                     tweet.entity_id = classification_result.topic_id
+                    tweet.project_tag = None  # 确保project_tag为空
                     # 4.3 对于非项目推文，提取token symbols
                     token_tag = self._extract_token_symbols(tweet.full_text)
                     tweet.token_tag = token_tag
@@ -134,18 +136,25 @@ class TweetEnricher:
                     tweet.project_id = None
                     tweet.topic_id = None
                     tweet.entity_id = None
+                    tweet.project_tag = None
                     # 4.3 对于非项目推文，提取token symbols
                     token_tag = self._extract_token_symbols(tweet.full_text)
                     tweet.token_tag = token_tag
 
-                self.logger.info(f"推文 {tweet.id_str} 增强完成: kol_id={kol_id}, valid={is_valid}, sentiment={sentiment}, project_id={tweet.project_id}, topic_id={tweet.topic_id}, entity_id={tweet.entity_id}, token_tag={tweet.token_tag}, url={tweet_url}")
+                # 4.4 对所有有效推文判断是否为重要公告（不区分项目/话题）
+                is_announce = self._classify_announcement(tweet.full_text)
+                tweet.is_announce = is_announce
+
+                self.logger.info(f"推文 {tweet.id_str} 增强完成: kol_id={kol_id}, valid={is_valid}, sentiment={sentiment}, project_id={tweet.project_id}, topic_id={tweet.topic_id}, entity_id={tweet.entity_id}, project_tag={tweet.project_tag}, token_tag={tweet.token_tag}, is_announce={tweet.is_announce}, url={tweet_url}")
             else:
                 # 无效推文不进行话题分析和情绪分析
                 tweet.sentiment = None
                 tweet.entity_id = None
                 tweet.project_id = None
                 tweet.topic_id = None
+                tweet.project_tag = None
                 tweet.token_tag = None  # 无效推文也不提取token
+                tweet.is_announce = 0  # 无效推文不是公告
                 self.logger.info(f"推文 {tweet.id_str} 标记为无效，kol_id={kol_id}, url={tweet_url}")
             
             return tweet
@@ -630,6 +639,34 @@ class TweetEnricher:
         except Exception as e:
             self.logger.error(f"提取token symbols失败: {e}")
             return None
+
+    def _classify_announcement(self, text: str) -> int:
+        """
+        判断推文是否为重要公告
+
+        Args:
+            text: 推文文本
+
+        Returns:
+            1表示是重要公告，0表示不是
+        """
+        try:
+            if not text or len(text.strip()) < 10:
+                return 0
+
+            # 使用ChatGPT判断是否为公告
+            is_announce = self.chatgpt.classify_tweet_announcement(text)
+
+            if is_announce == 1:
+                self.logger.info(f"识别为重要公告")
+            else:
+                self.logger.debug(f"非重要公告")
+
+            return is_announce
+
+        except Exception as e:
+            self.logger.error(f"判断公告失败: {e}")
+            return 0
 
 
 # 全局推文增强器实例

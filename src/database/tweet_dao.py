@@ -45,9 +45,9 @@ class TweetDAO:
                 full_text, created_at, created_at_datetime,
                 bookmark_count, favorite_count, quote_count, reply_count,
                 retweet_count, view_count, engagement_total, update_time,
-                kol_id, entity_id, project_id, topic_id, is_valid, sentiment, tweet_url, link_url, token_tag
+                kol_id, entity_id, project_id, topic_id, is_valid, sentiment, tweet_url, link_url, token_tag, project_tag, is_announce
             ) VALUES (
-                %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s
+                %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s
             )
             """
 
@@ -75,7 +75,9 @@ class TweetDAO:
                 tweet_data['sentiment'],
                 tweet_data['tweet_url'],
                 tweet_data.get('link_url'),  # 使用get方法以防字段不存在
-                tweet_data.get('token_tag')
+                tweet_data.get('token_tag'),
+                tweet_data.get('project_tag'),
+                tweet_data.get('is_announce', 0)  # 默认为0
             )
             
             affected_rows = self.db_manager.execute_update(sql, params)
@@ -119,9 +121,9 @@ class TweetDAO:
                 full_text, created_at, created_at_datetime,
                 bookmark_count, favorite_count, quote_count, reply_count,
                 retweet_count, view_count, engagement_total, update_time,
-                kol_id, entity_id, project_id, topic_id, is_valid, sentiment, tweet_url, link_url, token_tag
+                kol_id, entity_id, project_id, topic_id, is_valid, sentiment, tweet_url, link_url, token_tag, project_tag, is_announce
             ) VALUES (
-                %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s
+                %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s
             )
             """
 
@@ -149,7 +151,9 @@ class TweetDAO:
                 tweet_data['sentiment'],
                 tweet_data['tweet_url'],
                 tweet_data.get('link_url'),  # 使用get方法以防字段不存在
-                tweet_data.get('token_tag')
+                tweet_data.get('token_tag'),
+                tweet_data.get('project_tag'),
+                tweet_data.get('is_announce', 0)  # 默认为0
             )
             
             affected_rows = self.db_manager.execute_update(sql, params)
@@ -198,9 +202,9 @@ class TweetDAO:
                 full_text, created_at, created_at_datetime,
                 bookmark_count, favorite_count, quote_count, reply_count,
                 retweet_count, view_count, engagement_total, update_time,
-                kol_id, entity_id, project_id, topic_id, is_valid, sentiment, tweet_url, link_url, token_tag
+                kol_id, entity_id, project_id, topic_id, is_valid, sentiment, tweet_url, link_url, token_tag, project_tag, is_announce
             ) VALUES (
-                %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s
+                %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s
             )
             """
 

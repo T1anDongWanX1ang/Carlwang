@@ -12,7 +12,7 @@ from .utils.data_mapper import data_mapper
 from .utils.config_manager import config
 from .utils.logger import get_logger
 from .utils.tweet_enricher import tweet_enricher
-from .utils.user_language_integration import UserLanguageIntegration
+# from .utils.user_language_integration import UserLanguageIntegration  # 语言检测已禁用
 from .models.tweet import Tweet
 from .models.user import TwitterUser
 from .topic_engine import topic_engine
@@ -34,14 +34,14 @@ class TwitterCrawler:
         # self.kol_engine = kol_engine  # KOL分析已禁用
         self.project_engine = project_engine
         self.tweet_enricher = tweet_enricher
-        
-        # 初始化用户语言集成器
-        from .api.chatgpt_client import chatgpt_client
-        self.user_language_integration = UserLanguageIntegration(
-            db_manager=self.user_dao.db_manager,
-            chatgpt_client=chatgpt_client
-        )
-        
+
+        # 初始化用户语言集成器（已禁用）
+        # from .api.chatgpt_client import chatgpt_client
+        # self.user_language_integration = UserLanguageIntegration(
+        #     db_manager=self.user_dao.db_manager,
+        #     chatgpt_client=chatgpt_client
+        # )
+
         # 爬取统计
         self.crawl_count = 0
         self.success_count = 0
@@ -337,57 +337,55 @@ class TwitterCrawler:
     def _save_users_to_database(self, users: List[TwitterUser]) -> int:
         """
         保存用户到数据库
-        
+
         Args:
             users: 用户列表
-            
+
         Returns:
             成功保存的数量
         """
         try:
             self.logger.info(f"开始保存 {len(users)} 条用户到数据库...")
-            
-            # 先进行语言检测增强
-            enhanced_users = self._enhance_users_with_language(users)
-            
-            # 批量保存增强后的用户数据
-            saved_count = self.user_dao.batch_upsert_users(enhanced_users)
-            
+
+            # 语言检测已禁用，直接批量保存用户数据
+            # enhanced_users = self._enhance_users_with_language(users)
+            saved_count = self.user_dao.batch_upsert_users(users)
+
             return saved_count
-            
+
         except Exception as e:
             self.logger.error(f"保存用户到数据库失败: {e}")
             return 0
     
-    def _enhance_users_with_language(self, users: List[TwitterUser]) -> List[TwitterUser]:
-        """
-        为用户列表添加语言检测信息
-        
-        Args:
-            users: 用户列表
-            
-        Returns:
-            增强后的用户列表
-        """
-        try:
-            self.logger.info(f"开始为 {len(users)} 个用户进行语言检测...")
-            
-            # 使用批量语言检测
-            enhanced_users = self.user_language_integration.enhance_users_batch(
-                users=users,
-                use_ai_fallback=False  # 暂时不使用AI辅助，避免过多API调用
-            )
-            
-            self.logger.info(f"完成语言检测，增强了 {len(enhanced_users)} 个用户")
-            return enhanced_users
-            
-        except Exception as e:
-            self.logger.error(f"用户语言检测失败: {e}")
-            # 如果语言检测失败，设置默认语言并返回原用户列表
-            for user in users:
-                if not hasattr(user, 'language') or user.language is None:
-                    user.language = "English"  # 默认设为English
-            return users
+    # def _enhance_users_with_language(self, users: List[TwitterUser]) -> List[TwitterUser]:
+    #     """
+    #     为用户列表添加语言检测信息（已禁用）
+    #
+    #     Args:
+    #         users: 用户列表
+    #
+    #     Returns:
+    #         增强后的用户列表
+    #     """
+    #     try:
+    #         self.logger.info(f"开始为 {len(users)} 个用户进行语言检测...")
+    #
+    #         # 使用批量语言检测
+    #         enhanced_users = self.user_language_integration.enhance_users_batch(
+    #             users=users,
+    #             use_ai_fallback=False  # 暂时不使用AI辅助，避免过多API调用
+    #         )
+    #
+    #         self.logger.info(f"完成语言检测，增强了 {len(enhanced_users)} 个用户")
+    #         return enhanced_users
+    #
+    #     except Exception as e:
+    #         self.logger.error(f"用户语言检测失败: {e}")
+    #         # 如果语言检测失败，设置默认语言并返回原用户列表
+    #         for user in users:
+    #             if not hasattr(user, 'language') or user.language is None:
+    #                 user.language = "English"  # 默认设为English
+    #         return users
     
     def _save_tweets_to_database(self, tweets: List[Tweet]) -> int:
         """

@@ -1669,6 +1669,75 @@ Output only the above JSON without additional explanation."""
             self.logger.error(f"提取token symbols失败: {e}")
             return None
 
+    def classify_tweet_announcement(self, tweet_content: str) -> int:
+        """
+        判断推文是否为重要公告（合作伙伴、社区活动、技术更新）
+
+        Args:
+            tweet_content: 推文内容
+
+        Returns:
+            1表示是重要公告，0表示不是
+        """
+        try:
+            prompt = f"""
+You are given the content of a tweet from the official account of a crypto project.
+Your task is to determine whether the tweet falls into one or more of the following categories:
+
+* **key ecosystem partners & collaborations**: announcements about strategic partners, ecosystem alliances, collaborations with other projects or companies.
+* **Community space and other events**: announcements about AMA sessions, Twitter Spaces, conferences, hackathons, offline/online meetups, or community-related activities.
+* **Major Tech Updates**: announcements about new product releases, protocol upgrades, mainnet/testnet launches, technical milestones, or major software updates.
+
+Tweet content: {tweet_content}
+
+Please analyze the tweet and determine if it matches ANY of the above categories.
+
+Return in JSON format:
+{{"is_announcement": true or false, "categories": ["category1", "category2"], "reason": "brief explanation"}}
+
+If the tweet does NOT match any category, return:
+{{"is_announcement": false, "categories": [], "reason": "brief explanation"}}
+"""
+
+            messages = [
+                {"role": "system", "content": "You are a professional crypto content analyst skilled in identifying important announcements from project tweets."},
+                {"role": "user", "content": prompt}
+            ]
+
+            response = self._make_request(
+                messages=messages,
+                temperature=0.1,  # 低温度以获得更确定的结果
+                max_tokens=200
+            )
+
+            if response:
+                try:
+                    # 尝试解析JSON响应
+                    result = json.loads(response.strip())
+
+                    # 验证返回的数据
+                    if isinstance(result, dict) and 'is_announcement' in result:
+                        is_announcement = result['is_announcement']
+                        categories = result.get('categories', [])
+                        reason = result.get('reason', '')
+
+                        if is_announcement:
+                            self.logger.info(f"识别为重要公告: 类别={categories}, 理由={reason}")
+                            return 1
+                        else:
+                            self.logger.debug(f"非重要公告: {reason}")
+                            return 0
+
+                except json.JSONDecodeError:
+                    self.logger.warning(f"ChatGPT返回的不是有效JSON: {response}")
+                    return 0
+
+            return 0
+
+        except Exception as e:
+            self.logger.error(f"判断公告类型失败: {e}")
+            return 0
+
 
 # 全局ChatGPT客户端实例
 chatgpt_client = ChatGPTClient() 
