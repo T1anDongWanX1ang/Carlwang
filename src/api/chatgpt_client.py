@@ -151,9 +151,19 @@ class ChatGPTClient:
             
             if response:
                 try:
+                    # 清理响应内容，移除代码块标记
+                    cleaned_response = response.strip()
+                    if cleaned_response.startswith('```json'):
+                        cleaned_response = cleaned_response[7:]  # 移除 ```json
+                    if cleaned_response.startswith('```'):
+                        cleaned_response = cleaned_response[3:]  # 移除 ```
+                    if cleaned_response.endswith('```'):
+                        cleaned_response = cleaned_response[:-3]  # 移除结尾的 ```
+                    cleaned_response = cleaned_response.strip()
+
                     # 尝试解析JSON响应
-                    result = json.loads(response.strip())
-                    
+                    result = json.loads(cleaned_response)
+
                     # 验证返回的数据
                     if isinstance(result, dict) and 'topic_name' in result and 'brief' in result:
                         topic_name = result['topic_name'].strip()
@@ -223,8 +233,19 @@ class ChatGPTClient:
             
             if response:
                 try:
-                    result = json.loads(response.strip())
-                    
+                    # 清理响应内容，移除代码块标记
+                    cleaned_response = response.strip()
+                    if cleaned_response.startswith('```json'):
+                        cleaned_response = cleaned_response[7:]  # 移除 ```json
+                    if cleaned_response.startswith('```'):
+                        cleaned_response = cleaned_response[3:]  # 移除 ```
+                    if cleaned_response.endswith('```'):
+                        cleaned_response = cleaned_response[:-3]  # 移除结尾的 ```
+                    cleaned_response = cleaned_response.strip()
+
+                    # 尝试解析JSON响应
+                    result = json.loads(cleaned_response)
+
                     if isinstance(result, dict) and 'sentiment' in result and 'confidence' in result:
                         sentiment = result['sentiment']
                         confidence = float(result['confidence'])
@@ -813,9 +834,19 @@ Output only the above JSON without additional explanation."""
             
             if response:
                 try:
+                    # 清理响应内容，移除代码块标记
+                    cleaned_response = response.strip()
+                    if cleaned_response.startswith('```json'):
+                        cleaned_response = cleaned_response[7:]  # 移除 ```json
+                    if cleaned_response.startswith('```'):
+                        cleaned_response = cleaned_response[3:]  # 移除 ```
+                    if cleaned_response.endswith('```'):
+                        cleaned_response = cleaned_response[:-3]  # 移除结尾的 ```
+                    cleaned_response = cleaned_response.strip()
+
                     # 尝试解析JSON响应
-                    result = json.loads(response.strip())
-                    
+                    result = json.loads(cleaned_response)
+
                     # 验证返回的数据
                     if isinstance(result, dict) and 'type' in result:
                         # 过滤非KOL用户
@@ -1300,10 +1331,20 @@ Output only the above JSON without additional explanation."""
                 temperature=0.2,
                 max_tokens=200
             )
-            
+
             if response:
                 try:
-                    result = json.loads(response.strip())
+                    # 清理响应内容，移除代码块标记
+                    cleaned_response = response.strip()
+                    if cleaned_response.startswith('```json'):
+                        cleaned_response = cleaned_response[7:]  # 移除 ```json
+                    if cleaned_response.startswith('```'):
+                        cleaned_response = cleaned_response[3:]  # 移除 ```
+                    if cleaned_response.endswith('```'):
+                        cleaned_response = cleaned_response[:-3]  # 移除结尾的 ```
+                    cleaned_response = cleaned_response.strip()
+
+                    result = json.loads(cleaned_response)
                     return result.get('sentiment_index')
                 except json.JSONDecodeError:
                     # 尝试提取数字
@@ -1311,9 +1352,9 @@ Output only the above JSON without additional explanation."""
                     match = re.search(r'(\d+\.?\d*)', response)
                     if match:
                         return float(match.group(1))
-            
+
             return None
-            
+
         except Exception as e:
             self.logger.error(f"计算项目情感失败: {e}")
             return None
@@ -1561,10 +1602,20 @@ Output only the above JSON without additional explanation."""
                 temperature=0.2,
                 max_tokens=200
             )
-            
+
             if response:
                 try:
-                    result = json.loads(response.strip())
+                    # 清理响应内容，移除代码块标记
+                    cleaned_response = response.strip()
+                    if cleaned_response.startswith('```json'):
+                        cleaned_response = cleaned_response[7:]  # 移除 ```json
+                    if cleaned_response.startswith('```'):
+                        cleaned_response = cleaned_response[3:]  # 移除 ```
+                    if cleaned_response.endswith('```'):
+                        cleaned_response = cleaned_response[:-3]  # 移除结尾的 ```
+                    cleaned_response = cleaned_response.strip()
+
+                    result = json.loads(cleaned_response)
                     return result.get('sentiment_index')
                 except json.JSONDecodeError:
                     # 尝试提取数字
@@ -1572,9 +1623,9 @@ Output only the above JSON without additional explanation."""
                     match = re.search(r'(\d+\.?\d*)', response)
                     if match:
                         return float(match.group(1))
-            
+
             return None
-            
+
         except Exception as e:
             self.logger.error(f"计算项目情感失败: {e}")
             return None
@@ -1632,8 +1683,18 @@ Output only the above JSON without additional explanation."""
 
             if response:
                 try:
+                    # 清理响应内容，移除代码块标记
+                    cleaned_response = response.strip()
+                    if cleaned_response.startswith('```json'):
+                        cleaned_response = cleaned_response[7:]  # 移除 ```json
+                    if cleaned_response.startswith('```'):
+                        cleaned_response = cleaned_response[3:]  # 移除 ```
+                    if cleaned_response.endswith('```'):
+                        cleaned_response = cleaned_response[:-3]  # 移除结尾的 ```
+                    cleaned_response = cleaned_response.strip()
+
                     # 尝试解析JSON响应
-                    result = json.loads(response.strip())
+                    result = json.loads(cleaned_response)
 
                     # 验证返回的数据
                     if isinstance(result, dict) and 'symbols' in result:
@@ -1712,8 +1773,18 @@ If the tweet does NOT match any category, return:
 
             if response:
                 try:
+                    # 清理响应内容，移除代码块标记
+                    cleaned_response = response.strip()
+                    if cleaned_response.startswith('```json'):
+                        cleaned_response = cleaned_response[7:]  # 移除 ```json
+                    if cleaned_response.startswith('```'):
+                        cleaned_response = cleaned_response[3:]  # 移除 ```
+                    if cleaned_response.endswith('```'):
+                        cleaned_response = cleaned_response[:-3]  # 移除结尾的 ```
+                    cleaned_response = cleaned_response.strip()
+
                     # 尝试解析JSON响应
-                    result = json.loads(response.strip())
+                    result = json.loads(cleaned_response)
 
                     # 验证返回的数据
                     if isinstance(result, dict) and 'is_announcement' in result:
