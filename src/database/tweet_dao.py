@@ -45,7 +45,7 @@ class TweetDAO:
                 full_text, created_at, created_at_datetime,
                 bookmark_count, favorite_count, quote_count, reply_count,
                 retweet_count, view_count, engagement_total, update_time,
-                kol_id, entity_id, project_id, topic_id, is_valid, sentiment, tweet_url, link_url, token_tag, project_tag, is_announce, summary
+                kol_id, entity_id, project_id, topic_id, is_valid, sentiment, tweet_url, link_url, token_tag, project_tag, isAnnounce, summary
             ) VALUES (
                 %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s
             )
@@ -122,7 +122,7 @@ class TweetDAO:
                 full_text, created_at, created_at_datetime,
                 bookmark_count, favorite_count, quote_count, reply_count,
                 retweet_count, view_count, engagement_total, update_time,
-                kol_id, entity_id, project_id, topic_id, is_valid, sentiment, tweet_url, link_url, token_tag, project_tag, is_announce, summary
+                kol_id, entity_id, project_id, topic_id, is_valid, sentiment, tweet_url, link_url, token_tag, project_tag, isAnnounce, summary
             ) VALUES (
                 %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s
             )
@@ -204,7 +204,7 @@ class TweetDAO:
                 full_text, created_at, created_at_datetime,
                 bookmark_count, favorite_count, quote_count, reply_count,
                 retweet_count, view_count, engagement_total, update_time,
-                kol_id, entity_id, project_id, topic_id, is_valid, sentiment, tweet_url, link_url, token_tag, project_tag, is_announce, summary
+                kol_id, entity_id, project_id, topic_id, is_valid, sentiment, tweet_url, link_url, token_tag, project_tag, isAnnounce, summary
             ) VALUES (
                 %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s
             )
