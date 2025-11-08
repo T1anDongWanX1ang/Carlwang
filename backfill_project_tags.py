@@ -14,6 +14,7 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 from src.database.connection import db_manager
 from src.utils.smart_classifier import SmartClassifier
+from src.models.tweet import Tweet
 
 
 # 配置日志
@@ -196,7 +197,15 @@ def backfill_project_tags(tweets: List[Dict[str, Any]], batch_size: int = 50) ->
 
             # 使用智能分类器进行分类
             logger.info(f"处理推文 {i+1}/{len(tweets)}: {id_str}")
-            classification_result = classifier.classify_content(full_text, id_str)
+
+            # 创建Tweet对象
+            tweet_obj = Tweet(
+                id_str=id_str,
+                full_text=full_text,
+                created_at_datetime=tweet.get('created_at_datetime')
+            )
+
+            classification_result = classifier.classify_tweet(tweet_obj)
 
             if not classification_result:
                 logger.debug(f"推文 {id_str} 分类失败，跳过")
