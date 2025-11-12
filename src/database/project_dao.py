@@ -37,12 +37,13 @@ class ProjectDAO:
             INSERT INTO {self.table_name} (
                 project_id, name, symbol, token_address, twitter_id,
                 created_at, category, narratives, sentiment_index, sentiment_history,
-                popularity, popularity_history, summary, last_updated, update_time
+                popularity, popularity_history, summary, is_announce, announce_summary,
+                last_updated, update_time
             ) VALUES (
-                %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s
+                %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s
             )
             """
-            
+
             project_data = project.to_dict()
             params = (
                 project_data['project_id'],
@@ -58,6 +59,8 @@ class ProjectDAO:
                 project_data['popularity'],
                 project_data['popularity_history'],
                 project_data['summary'],
+                project_data['is_announce'],
+                project_data['announce_summary'],
                 project_data['last_updated'],
                 project_data['update_time']
             )
@@ -109,11 +112,13 @@ class ProjectDAO:
                     popularity = %s,
                     popularity_history = %s,
                     summary = %s,
+                    is_announce = %s,
+                    announce_summary = %s,
                     last_updated = %s,
                     update_time = %s
                 WHERE project_id = %s
                 """
-                
+
                 project_data = project.to_dict()
                 params = (
                     project_data['name'],
@@ -127,6 +132,8 @@ class ProjectDAO:
                     project_data['popularity'],
                     project_data['popularity_history'],
                     project_data['summary'],
+                    project_data['is_announce'],
+                    project_data['announce_summary'],
                     project_data['last_updated'],
                     project_data['update_time'],
                     project_data['project_id']

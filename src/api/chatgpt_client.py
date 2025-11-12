@@ -664,31 +664,33 @@ Output only the above JSON without additional explanation."""
             merged_content = "\n---\n".join(tweets[:5])  # 最多5条推文
             if len(merged_content) > self.content_merge_threshold:
                 merged_content = merged_content[:self.content_merge_threshold] + "..."
-            
-            prompt = f"""
-分析以下多条相关推文，提取共同讨论的主要话题：
 
-推文内容：
+            prompt = f"""
+Analyze the following related tweets and extract the main topic being discussed:
+
+Tweet content:
 {merged_content}
 
-请识别：
-1. 主要讨论的话题名称
-2. 话题的简要描述
+Please identify:
+1. topic_name: Main topic name (5-15 words, highlighting the core theme)
+2. brief: Brief topic description (20-50 words, explaining topic content and background in English)
 
-返回格式：
+IMPORTANT: Both topic_name and brief MUST be in English.
+
+Return format:
 {{
-  "topic_name": "话题名称",
-  "brief": "简要描述"
+  "topic_name": "Topic Name",
+  "brief": "Brief Description"
 }}
             """
-            
+
             messages = [
-                {"role": "system", "content": "你是一个专业的社交媒体内容分析师，擅长从多条推文中提取核心话题。"},
+                {"role": "system", "content": "You are a professional social media content analyst skilled in extracting core topics from multiple tweets. Always respond in English."},
                 {"role": "user", "content": prompt}
             ]
-            
+
             response = self._make_request(messages, temperature=0.3, max_tokens=200)
-            
+
             if response:
                 # 解析JSON响应
                 import json
@@ -698,9 +700,9 @@ Output only the above JSON without additional explanation."""
                     json_str = response[json_start:json_end]
                     result = json.loads(json_str)
                     return result
-            
+
             return None
-            
+
         except Exception as e:
             self.logger.error(f"合并内容话题提取失败: {e}")
             return None
@@ -1868,6 +1870,145 @@ Now generate the summary:
 
         except Exception as e:
             self.logger.error(f"Failed to generate announcement summary: {e}")
+            return None
+
+    def detect_campaign_announcement(self, tweets_content: List[str]) -> bool:
+        """
+        检测推文是否包含活动公告关键词
+
+        关键词包括: campaign, airdrop, quest, reward, giveaway
+
+        Args:
+            tweets_content: 推文内容列表
+
+        Returns:
+            是否为活动公告
+        """
+        try:
+            # 合并推文内容
+            combined_content = "\n".join(tweets_content[:10])  # 限制推文数量
+
+            prompt = f"""
+            Analyze the following tweets and determine if they contain campaign/event announcements.
+
+            Key indicators of campaign announcements include:
+            - campaign
+            - airdrop
+            - quest
+            - reward
+            - giveaway
+
+            Also look for related terms like:
+            - token distribution
+            - community rewards
+            - participation incentives
+            - bounty program
+            - contest
+            - prize
+
+            Tweets content:
+            {combined_content}
+
+            Task: Determine if these tweets announce or discuss a campaign, airdrop, quest, reward program, or giveaway.
+
+            Return ONLY "true" if it's a campaign announcement, or "false" if it's not.
+            Return a single word without any additional explanation.
+            """
+
+            messages = [
+                {"role": "system", "content": "You are a cryptocurrency campaign and airdrop detection expert. Analyze tweets to identify campaign announcements accurately."},
+                {"role": "user", "content": prompt}
+            ]
+
+            response = self._make_request(
+                messages=messages,
+                temperature=0.1,  # Low temperature for consistent detection
+                max_tokens=10
+            )
+
+            if response:
+                result = response.strip().lower()
+                is_campaign = result == "true" or "true" in result
+
+                self.logger.info(f"Campaign detection result: {is_campaign}")
+                return is_campaign
+
+            return False
+
+        except Exception as e:
+            self.logger.error(f"Failed to detect campaign announcement: {e}")
+            return False
+
+    def generate_campaign_summary(self, project_info: Dict[str, Any],
+                                 tweets_content: List[str]) -> Optional[str]:
+        """
+        生成活动公告摘要（英文提示词）
+
+        Args:
+            project_info: 项目基本信息
+            tweets_content: 相关推文内容列表
+
+        Returns:
+            活动摘要文本
+        """
+        try:
+            # 合并推文内容
+            tweets_sample = tweets_content[:10]
+            tweets_text = "\n".join([f"- {tweet}" for tweet in tweets_sample])
+
+            prompt = f"""
+            Generate a professional campaign announcement summary for the cryptocurrency project.
+
+            Project Information:
+            - Name: {project_info.get('name', 'Unknown')}
+            - Symbol: {project_info.get('symbol', 'Unknown')}
+            - Category: {project_info.get('category', 'Unknown')}
+
+            Related Campaign Tweets:
+            {tweets_text}
+
+            Please provide a comprehensive campaign summary including:
+            1. Campaign Type: Specify if it's an airdrop, quest, reward program, giveaway, or other campaign type
+            2. Key Details: What participants need to do, eligibility criteria, rewards offered
+            3. Timeline: Start date, end date, or duration if mentioned
+            4. Requirements: Specific actions required (follow, retweet, hold tokens, complete tasks, etc.)
+            5. Reward Distribution: How and when rewards will be distributed
+
+            Requirements:
+            - Professional and clear tone
+            - 100-150 words
+            - Focus on actionable information for potential participants
+            - Highlight important dates and requirements
+            - Use English for the summary
+
+            Return ONLY the summary text without any additional formatting or labels.
+            """
+
+            messages = [
+                {"role": "system", "content": "You are a professional cryptocurrency campaign analyst skilled in summarizing campaign announcements clearly and concisely."},
+                {"role": "user", "content": prompt}
+            ]
+
+            response = self._make_request(
+                messages=messages,
+                temperature=0.3,
+                max_tokens=300
+            )
+
+            if response:
+                summary = response.strip()
+
+                if len(summary) > 0:
+                    self.logger.info(f"Generated campaign summary: {summary[:100]}...")
+                    return summary
+                else:
+                    self.logger.warning("Generated campaign summary is empty")
+                    return None
+
+            return None
+
+        except Exception as e:
+            self.logger.error(f"Failed to generate campaign summary: {e}")
             return None
 
 

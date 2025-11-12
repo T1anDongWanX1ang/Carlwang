@@ -28,6 +28,8 @@ class Project:
     popularity: Optional[int] = 0                 # 项目热度
     popularity_history: Optional[List[Dict[str, Any]]] = field(default_factory=list)  # 热度历史
     summary: Optional[str] = None                 # AI总结
+    is_announce: Optional[int] = 0                # 是否为活动公告 (0=否, 1=是)
+    announce_summary: Optional[str] = None        # 活动摘要（当is_announce=1时）
     created_at: Optional[datetime] = field(default_factory=datetime.now)
     last_updated: Optional[datetime] = field(default_factory=datetime.now)
     update_time: Optional[datetime] = field(default_factory=datetime.now)
@@ -95,7 +97,7 @@ class Project:
     def to_dict(self) -> Dict[str, Any]:
         """
         转换为字典格式，用于数据库插入
-        
+
         Returns:
             字典格式的数据
         """
@@ -112,6 +114,8 @@ class Project:
             'popularity': self.popularity,
             'popularity_history': json.dumps(self.popularity_history or [], ensure_ascii=False),
             'summary': self.summary,
+            'is_announce': self.is_announce or 0,
+            'announce_summary': self.announce_summary,
             'created_at': self.created_at or datetime.now(),
             'last_updated': self.last_updated or datetime.now(),
             'update_time': self.update_time or datetime.now()
@@ -163,6 +167,8 @@ class Project:
             popularity=data.get('popularity', 0),
             popularity_history=popularity_history,
             summary=data.get('summary'),
+            is_announce=data.get('is_announce', 0),
+            announce_summary=data.get('announce_summary'),
             created_at=data.get('created_at'),
             last_updated=data.get('last_updated'),
             update_time=data.get('update_time')

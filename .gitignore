@@ -39,10 +39,12 @@ config/config.json
 *.log
 service.log
 monitor.log
+kol_fetch.log
 
 # Runtime files
 *.pid
 twitter-crawler.pid
+kol_fetch.pid
 
 # IDE
 .vscode/
@@ -63,3 +65,6 @@ twitter-crawler.pid
 *.tmp
 *.temp
 .cache/
+
+# KOL Following Fetcher cache
+.kol_cache/

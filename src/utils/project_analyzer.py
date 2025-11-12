@@ -90,12 +90,36 @@ class ProjectAnalyzer:
             for project in projects:
                 related_tweets = self._get_project_related_tweets(project, tweets)
                 summary = self.chatgpt_client.generate_project_summary(
-                    project.to_dict(), 
+                    project.to_dict(),
                     [tweet.full_text for tweet in related_tweets]
                 )
                 if summary:
                     project.summary = summary
-            
+
+            # 6. 检测活动公告并生成活动摘要
+            for project in projects:
+                related_tweets = self._get_project_related_tweets(project, tweets)
+                tweets_content = [tweet.full_text for tweet in related_tweets if tweet.full_text]
+
+                if tweets_content:
+                    # 检测是否为活动公告
+                    is_campaign = self.chatgpt_client.detect_campaign_announcement(tweets_content)
+
+                    if is_campaign:
+                        self.logger.info(f"检测到项目 {project.name} 的活动公告")
+                        project.is_announce = 1
+
+                        # 生成活动摘要
+                        campaign_summary = self.chatgpt_client.generate_campaign_summary(
+                            project.to_dict(),
+                            tweets_content
+                        )
+                        if campaign_summary:
+                            project.announce_summary = campaign_summary
+                            self.logger.info(f"项目 {project.name} 活动摘要生成成功")
+                    else:
+                        project.is_announce = 0
+
             self.logger.info(f"成功提取 {len(projects)} 个项目")
             return projects
             

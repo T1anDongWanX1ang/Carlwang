@@ -384,33 +384,33 @@ class TweetDAO:
     def get_recent_tweets(self, since_time: datetime = None, limit: int = 100) -> List[Tweet]:
         """
         获取最近的推文
-        
+
         Args:
             since_time: 起始时间
             limit: 限制数量
-            
+
         Returns:
             推文列表
         """
         try:
             if since_time:
                 sql = f"""
-                SELECT * FROM {self.table_name} 
-                WHERE created_at >= %s 
-                ORDER BY created_at DESC 
+                SELECT * FROM {self.table_name}
+                WHERE created_at_datetime >= %s
+                ORDER BY created_at_datetime DESC
                 LIMIT %s
                 """
                 results = self.db_manager.execute_query(sql, (since_time, limit))
             else:
                 sql = f"""
-                SELECT * FROM {self.table_name} 
-                ORDER BY created_at DESC 
+                SELECT * FROM {self.table_name}
+                ORDER BY created_at_datetime DESC
                 LIMIT %s
                 """
                 results = self.db_manager.execute_query(sql, (limit,))
-            
+
             return [self._dict_to_tweet(row) for row in results]
-            
+
         except Exception as e:
             self.logger.error(f"查询最近推文失败: {e}")
             return []
