@@ -419,7 +419,7 @@ class KOLFollowingsFetcher:
         except Exception as e:
             self.logger.error(f"查看缓存状态失败: {e}")
 
-    def _fetch_followings(self, user_name: str, page_size: int = 50) -> List[Dict[str, Any]]:
+    def _fetch_followings(self, user_name: str, page_size: int = 200) -> List[Dict[str, Any]]:
         """
         调用第三方API获取关注列表
 
@@ -465,7 +465,7 @@ class KOLFollowingsFetcher:
 
     def _save_followings(self, followings: List[Dict[str, Any]]) -> int:
         """
-        保存关注用户到数据库
+        保存关注用户到数据库（批量插入优化）
 
         Args:
             followings: 关注用户列表
@@ -473,21 +473,31 @@ class KOLFollowingsFetcher:
         Returns:
             成功插入的数量
         """
-        inserted_count = 0
+        if not followings:
+            return 0
 
-        for following in followings:
-            try:
-                # 数据映射和处理
-                user_data = self._map_following_data(following)
+        try:
+            # 1. 批量映射数据
+            user_data_list = []
+            for following in followings:
+                try:
+                    user_data = self._map_following_data(following)
+                    user_data_list.append(user_data)
+                except Exception as e:
+                    self.logger.warning(f"  映射数据失败 {following.get('id')}: {e}")
+                    continue
 
-                if self._insert_or_update_user(user_data):
-                    inserted_count += 1
+            if not user_data_list:
+                return 0
 
-            except Exception as e:
-                self.logger.error(f"  保存用户失败 {following.get('id')}: {e}")
-                continue
+            # 2. 批量插入
+            return self._batch_insert_users(user_data_list)
 
-        return inserted_count
+        except Exception as e:
+            self.logger.error(f"  批量保存失败: {e}")
+            # 批量插入失败时，回退到逐条插入
+            self.logger.warning(f"  回退到逐条插入模式...")
+            return self._save_followings_fallback(followings)
 
     def _map_following_data(self, following: Dict[str, Any]) -> Dict[str, Any]:
         """
@@ -586,6 +596,111 @@ class KOLFollowingsFetcher:
                 return False
             else:
                 raise e
+
+    def _batch_insert_users(self, user_data_list: List[Dict[str, Any]]) -> int:
+        """
+        批量插入用户数据（性能优化）
+
+        Args:
+            user_data_list: 用户数据列表
+
+        Returns:
+            成功插入的数量
+        """
+        if not user_data_list:
+            return 0
+
+        try:
+            sql = """
+            INSERT INTO public_data.twitter_kol_all (
+                `id`, `name`, `user_name`, `avatar`, `description`,
+                `created_at`, `created_at_time`, `account_age_days`,
+                `followers`, `following`, `statuses_count`, `update_time`
+            ) VALUES (
+                %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s
+            )
+            """
+
+            # 准备批量插入的参数
+            params_list = []
+            for user_data in user_data_list:
+                params = (
+                    user_data['id'],
+                    user_data['name'],
+                    user_data['user_name'],
+                    user_data['avatar'],
+                    user_data['description'],
+                    user_data['created_at'],
+                    user_data['created_at_time'],
+                    user_data['account_age_days'],
+                    user_data['followers'],
+                    user_data['following'],
+                    user_data['statuses_count'],
+                    user_data['update_time']
+                )
+                params_list.append(params)
+
+            # 使用 db_manager 的上下文管理器批量执行
+            with self.db_manager.get_cursor() as (conn, cursor):
+                try:
+                    cursor.executemany(sql, params_list)
+                    conn.commit()
+                    inserted_count = cursor.rowcount
+                    self.logger.debug(f"  批量插入成功: {inserted_count} 条")
+                    return inserted_count
+                except Exception as e:
+                    conn.rollback()
+                    # 如果是重复键错误，尝试逐条插入以获取准确计数
+                    if 'Duplicate entry' in str(e) or 'duplicate key' in str(e).lower():
+                        self.logger.debug(f"  批量插入遇到重复键，切换到逐条插入模式")
+                        return self._save_followings_one_by_one(user_data_list)
+                    else:
+                        raise e
+
+        except Exception as e:
+            self.logger.error(f"  批量插入失败: {e}")
+            raise e
+
+    def _save_followings_one_by_one(self, user_data_list: List[Dict[str, Any]]) -> int:
+        """
+        逐条插入用户数据（处理重复键情况）
+
+        Args:
+            user_data_list: 用户数据列表
+
+        Returns:
+            成功插入的数量
+        """
+        inserted_count = 0
+        for user_data in user_data_list:
+            try:
+                if self._insert_or_update_user(user_data):
+                    inserted_count += 1
+            except Exception as e:
+                self.logger.warning(f"  插入用户失败 {user_data['id']}: {e}")
+                continue
+        return inserted_count
+
+    def _save_followings_fallback(self, followings: List[Dict[str, Any]]) -> int:
+        """
+        回退方案：逐条保存（原始实现）
+
+        Args:
+            followings: 关注用户列表
+
+        Returns:
+            成功插入的数量
+        """
+        inserted_count = 0
+        for following in followings:
+            try:
+                user_data = self._map_following_data(following)
+                if self._insert_or_update_user(user_data):
+                    inserted_count += 1
+            except Exception as e:
+                self.logger.error(f"  保存用户失败 {following.get('id')}: {e}")
+                continue
+        return inserted_count
 
     def _show_statistics(self, test_mode: bool = False, dry_run: bool = False, resume_mode: bool = False):
         """显示统计信息"""

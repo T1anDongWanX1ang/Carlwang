@@ -155,15 +155,28 @@ class TwitterCrawler:
                 try:
                     self.logger.info("开始进行项目分析...")
                     project_success = self.project_engine.analyze_recent_tweets(hours=1, max_tweets=50)
-                    
+
                     if project_success:
                         self.logger.info("项目分析完成")
                     else:
                         self.logger.warning("项目分析失败，但不影响主流程")
-                        
+
                 except Exception as e:
                     self.logger.error(f"项目分析异常: {e}")
-                
+
+                # 进行活动检测和结构化
+                try:
+                    self.logger.info("开始进行活动检测和结构化...")
+                    activity_success = self._detect_and_structure_activities(enriched_tweets)
+
+                    if activity_success:
+                        self.logger.info("活动检测和结构化完成")
+                    else:
+                        self.logger.warning("活动检测和结构化失败，但不影响主流程")
+
+                except Exception as e:
+                    self.logger.error(f"活动检测异常: {e}")
+
                 self.success_count += 1
                 return True
             else:
@@ -408,7 +421,122 @@ class TwitterCrawler:
         except Exception as e:
             self.logger.error(f"保存推文到数据库失败: {e}")
             return 0
-    
+
+    def _detect_and_structure_activities(self, tweets: List[Tweet]) -> bool:
+        """
+        检测推文中的活动并结构化存储
+
+        Args:
+            tweets: 推文列表
+
+        Returns:
+            是否成功
+        """
+        try:
+            from .api.chatgpt_client import chatgpt_client
+            import json
+
+            # 活动关键词列表（用于初步过滤）
+            activity_keywords = [
+                'campaign', 'airdrop', 'quest', 'reward', 'giveaway',
+                'bounty', 'contest', 'prize', 'distribution', 'incentive',
+                '空投', '活动', '奖励', '赠送'
+            ]
+
+            # 过滤包含活动关键词的推文
+            candidate_tweets = []
+            for tweet in tweets:
+                if tweet.full_text:
+                    text_lower = tweet.full_text.lower()
+                    if any(keyword in text_lower for keyword in activity_keywords):
+                        candidate_tweets.append(tweet)
+
+            self.logger.info(f"从 {len(tweets)} 条推文中筛选出 {len(candidate_tweets)} 条候选活动推文")
+
+            if not candidate_tweets:
+                self.logger.info("没有发现包含活动关键词的推文")
+                return True
+
+            # 检测和结构化活动数据
+            activity_count = 0
+            for tweet in candidate_tweets:
+                try:
+                    # 1. 使用AI检测是否为真正的活动
+                    is_activity = chatgpt_client.detect_campaign_announcement([tweet.full_text])
+
+                    if is_activity:
+                        self.logger.info(f"检测到活动推文: {tweet.id_str}")
+
+                        # 2. 生成推文URL（使用通用格式，不需要用户名）
+                        tweet_url = f"https://twitter.com/i/status/{tweet.id_str}"
+
+                        # 3. 提取结构化数据
+                        activity_data = chatgpt_client.extract_activity_structured_data(
+                            tweet_text=tweet.full_text,
+                            tweet_url=tweet_url,
+                            tweet_time=str(tweet.created_at) if tweet.created_at else ""
+                        )
+
+                        if activity_data:
+                            # 4. 将结构化数据转换为JSON字符串存储到activity_detail字段
+                            activity_detail_json = json.dumps(activity_data, ensure_ascii=False)
+
+                            # 5. 更新数据库
+                            success = self._update_tweet_activity_status(
+                                tweet_id=tweet.id_str,
+                                is_activity=1,
+                                activity_detail=activity_detail_json
+                            )
+
+                            if success:
+                                activity_count += 1
+                                self.logger.info(f"活动数据已结构化: {activity_data['title']}")
+                        else:
+                            self.logger.warning(f"无法提取活动结构化数据: {tweet.id_str}")
+
+                except Exception as e:
+                    self.logger.error(f"处理推文活动检测失败 {tweet.id_str}: {e}")
+                    continue
+
+            self.logger.info(f"成功检测并结构化 {activity_count} 条活动推文")
+            return True
+
+        except Exception as e:
+            self.logger.error(f"活动检测和结构化失败: {e}")
+            return False
+
+    def _update_tweet_activity_status(self, tweet_id: str, is_activity: int,
+                                     activity_detail: str) -> bool:
+        """
+        更新推文的活动状态
+
+        Args:
+            tweet_id: 推文ID
+            is_activity: 是否为活动推文（0或1）
+            activity_detail: 活动详情（JSON字符串）
+
+        Returns:
+            是否成功
+        """
+        try:
+            table_name = self.tweet_dao.db_manager.db_config.get('tables', {}).get('tweet', 'twitter_tweet')
+
+            sql = f"""
+            UPDATE {table_name}
+            SET is_activity = %s, activity_detail = %s
+            WHERE id_str = %s
+            """
+
+            affected_rows = self.tweet_dao.db_manager.execute_update(
+                sql, (is_activity, activity_detail, tweet_id)
+            )
+
+            return affected_rows > 0
+
+        except Exception as e:
+            self.logger.error(f"更新推文活动状态失败 {tweet_id}: {e}")
+            return False
+
     def test_connection(self) -> bool:
         """
         测试数据库连接

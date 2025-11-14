@@ -2011,6 +2011,100 @@ Now generate the summary:
             self.logger.error(f"Failed to generate campaign summary: {e}")
             return None
 
+    def extract_activity_structured_data(self, tweet_text: str, tweet_url: str,
+                                         tweet_time: str) -> Optional[Dict[str, str]]:
+        """
+        从推文中提取结构化的活动数据（新JSON格式）
+
+        Args:
+            tweet_text: 推文内容（full_text）
+            tweet_url: 推文链接
+            tweet_time: 推文时间
+
+        Returns:
+            结构化的活动数据字典，包含以下字段：
+            - title: 活动标题（5个词以内）
+            - status: 活动状态（默认"Active"）
+            - summary: 活动摘要（20个词以内）
+            - time: 推文时间
+            - url: 推文链接
+        """
+        try:
+            prompt = f"""
+            Extract and structure campaign/activity information from this tweet into JSON format.
+
+            Tweet Content:
+            {tweet_text}
+
+            Task: Extract the following information and return ONLY a valid JSON object:
+            {{
+                "title": "Activity title in 5 words or less",
+                "status": "Active",
+                "summary": "Activity summary in 20 words or less",
+                "time": "{tweet_time}",
+                "url": "{tweet_url}"
+            }}
+
+            Requirements:
+            1. title: Create a concise title (max 5 words) that captures the campaign type and project
+            2. status: Always set to "Active" for current activities
+            3. summary: Provide a brief summary (max 20 words) covering key participation details
+            4. time: Use the provided tweet time as-is
+            5. url: Use the provided tweet URL as-is
+
+            Important:
+            - Return ONLY the JSON object, no additional text
+            - All text should be in English
+            - Keep title and summary concise and clear
+            - Focus on actionable information (what, how, rewards)
+
+            Return the JSON object:
+            """
+
+            messages = [
+                {"role": "system", "content": "You are a data extraction specialist. Extract campaign information and return valid JSON only."},
+                {"role": "user", "content": prompt}
+            ]
+
+            response = self._make_request(
+                messages=messages,
+                temperature=0.1,  # Low temperature for consistent extraction
+                max_tokens=200
+            )
+
+            if response:
+                # Parse JSON response
+                import json
+                try:
+                    # Clean response (remove markdown code blocks if present)
+                    cleaned_response = response.strip()
+                    if cleaned_response.startswith('```'):
+                        # Remove markdown code blocks
+                        lines = cleaned_response.split('\n')
+                        cleaned_response = '\n'.join([l for l in lines if not l.startswith('```')])
+
+                    activity_data = json.loads(cleaned_response.strip())
+
+                    # Validate required fields
+                    required_fields = ['title', 'status', 'summary', 'time', 'url']
+                    if all(field in activity_data for field in required_fields):
+                        self.logger.info(f"Extracted activity data: {activity_data['title']}")
+                        return activity_data
+                    else:
+                        self.logger.warning(f"Missing required fields in activity data: {activity_data}")
+                        return None
+
+                except json.JSONDecodeError as e:
+                    self.logger.error(f"Failed to parse JSON response: {e}")
+                    self.logger.error(f"Response was: {response}")
+                    return None
+
+            return None
+
+        except Exception as e:
+            self.logger.error(f"Failed to extract activity structured data: {e}")
+            return None
+
 
 # 全局ChatGPT客户端实例
 chatgpt_client = ChatGPTClient() 
