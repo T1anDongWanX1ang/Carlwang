@@ -45,6 +45,12 @@ class ChatGPTClient:
         self.enable_response_caching = opt_config.get('enable_response_caching', True)
         self.response_cache = {} if self.enable_response_caching else None
         self.cache_ttl_hours = opt_config.get('cache_ttl_hours', 24)
+        
+        # 打印模型配置信息
+        self.logger.info(f"🤖 ChatGPT客户端初始化完成")
+        self.logger.info(f"📋 使用模型: {self.model}")
+        self.logger.info(f"🔑 API密钥: {self.api_key[:10]}...{self.api_key[-4:] if len(self.api_key) > 14 else '*' * 4}")
+        self.logger.info(f"⚙️  超时设置: {self.timeout}秒，最大重试: {self.max_retries}次")
     
     def _get_client(self):
         """获取OpenAI客户端（延迟初始化）"""
