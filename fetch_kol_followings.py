@@ -167,8 +167,8 @@ class KOLFollowingsFetcher:
                             self.total_followings += len(followings)
 
                             if not dry_run:
-                                # 入库
-                                inserted = self._save_followings(followings)
+                                # 入库（传递当前KOL的user_name作为follower_id）
+                                inserted = self._save_followings(followings, follower_id=user_name)
                                 self.inserted_followings += inserted
                                 self.skipped_followings += (len(followings) - inserted)
                                 self.logger.info(f"  入库: {inserted} 条新增, {len(followings) - inserted} 条已存在")
@@ -463,12 +463,13 @@ class KOLFollowingsFetcher:
             self.logger.error(f"  获取关注列表失败: {e}")
             return []
 
-    def _save_followings(self, followings: List[Dict[str, Any]]) -> int:
+    def _save_followings(self, followings: List[Dict[str, Any]], follower_id: str = None) -> int:
         """
         保存关注用户到数据库（批量插入优化）
 
         Args:
             followings: 关注用户列表
+            follower_id: 关注者的user_name（即哪个KOL关注了这些用户）
 
         Returns:
             成功插入的数量
@@ -481,7 +482,7 @@ class KOLFollowingsFetcher:
             user_data_list = []
             for following in followings:
                 try:
-                    user_data = self._map_following_data(following)
+                    user_data = self._map_following_data(following, follower_id)
                     user_data_list.append(user_data)
                 except Exception as e:
                     self.logger.warning(f"  映射数据失败 {following.get('id')}: {e}")
@@ -497,14 +498,15 @@ class KOLFollowingsFetcher:
             self.logger.error(f"  批量保存失败: {e}")
             # 批量插入失败时，回退到逐条插入
             self.logger.warning(f"  回退到逐条插入模式...")
-            return self._save_followings_fallback(followings)
+            return self._save_followings_fallback(followings, follower_id)
 
-    def _map_following_data(self, following: Dict[str, Any]) -> Dict[str, Any]:
+    def _map_following_data(self, following: Dict[str, Any], follower_id: str = None) -> Dict[str, Any]:
         """
         映射API返回数据到数据库字段
 
         Args:
             following: API返回的关注用户数据
+            follower_id: 关注者的user_name（即哪个KOL关注了这个用户）
 
         Returns:
             映射后的数据字典
@@ -546,6 +548,7 @@ class KOLFollowingsFetcher:
             'followers': following.get('followers_count', 0),
             'following': following.get('following_count', 0),
             'statuses_count': following.get('statuses_count', 0),
+            'follower_id': follower_id,  # 添加关注者的user_name
             'update_time': datetime.now()
         }
 
@@ -565,9 +568,9 @@ class KOLFollowingsFetcher:
             INSERT INTO public_data.twitter_kol_all (
                 `id`, `name`, `user_name`, `avatar`, `description`,
                 `created_at`, `created_at_time`, `account_age_days`,
-                `followers`, `following`, `statuses_count`, `update_time`
+                `followers`, `following`, `statuses_count`, `follower_id`, `update_time`
             ) VALUES (
-                %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s
+                %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s
             )
             """
 
@@ -583,6 +586,7 @@ class KOLFollowingsFetcher:
                 user_data['followers'],
                 user_data['following'],
                 user_data['statuses_count'],
+                user_data['follower_id'],
                 user_data['update_time']
             )
 
@@ -615,9 +619,9 @@ class KOLFollowingsFetcher:
             INSERT INTO public_data.twitter_kol_all (
                 `id`, `name`, `user_name`, `avatar`, `description`,
                 `created_at`, `created_at_time`, `account_age_days`,
-                `followers`, `following`, `statuses_count`, `update_time`
+                `followers`, `following`, `statuses_count`, `follower_id`, `update_time`
             ) VALUES (
-                %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s
+                %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s
             )
             """
 
@@ -636,6 +640,7 @@ class KOLFollowingsFetcher:
                     user_data['followers'],
                     user_data['following'],
                     user_data['statuses_count'],
+                    user_data['follower_id'],
                     user_data['update_time']
                 )
                 params_list.append(params)
@@ -681,12 +686,13 @@ class KOLFollowingsFetcher:
                 continue
         return inserted_count
 
-    def _save_followings_fallback(self, followings: List[Dict[str, Any]]) -> int:
+    def _save_followings_fallback(self, followings: List[Dict[str, Any]], follower_id: str = None) -> int:
         """
         回退方案：逐条保存（原始实现）
 
         Args:
             followings: 关注用户列表
+            follower_id: 关注者的user_name（即哪个KOL关注了这些用户）
 
         Returns:
             成功插入的数量
@@ -694,7 +700,7 @@ class KOLFollowingsFetcher:
         inserted_count = 0
         for following in followings:
             try:
-                user_data = self._map_following_data(following)
+                user_data = self._map_following_data(following, follower_id)
                 if self._insert_or_update_user(user_data):
                     inserted_count += 1
             except Exception as e:
