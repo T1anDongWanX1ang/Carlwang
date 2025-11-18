@@ -31,6 +31,8 @@ def load_config_with_env():
     # OpenAI API
     if os.getenv('OPENAI_API_KEY'):
         config['chatgpt']['api_key'] = os.getenv('OPENAI_API_KEY')
+    if os.getenv('OPENAI_MODEL'):
+        config['chatgpt']['model'] = os.getenv('OPENAI_MODEL')
     
     # 数据库配置
     if os.getenv('DB_HOST'):
@@ -73,6 +75,7 @@ TWEETSCOUT_API_KEY=your-tweetscout-api-key
 
 # OpenAI API配置  
 OPENAI_API_KEY=your-openai-api-key
+OPENAI_MODEL=gpt-4o-mini
 
 # 数据库配置
 DB_HOST=your-database-host
