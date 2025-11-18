@@ -21,7 +21,7 @@
   },
   "chatgpt": {
     "api_key": "YOUR_OPENAI_API_KEY",
-    "model": "gpt-3.5-turbo",
+    "model": "gpt-4o-mini",
     "timeout": 30,
     "max_retries": 3,
     "retry_delay": 2,

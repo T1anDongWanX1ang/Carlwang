@@ -18,7 +18,7 @@ class ChatGPTClient:
         """初始化ChatGPT客户端"""
         self.chatgpt_config = config.get('chatgpt', {})
         self.api_key = self.chatgpt_config.get('api_key', '')
-        self.model = self.chatgpt_config.get('model', 'gpt-3.5-turbo')
+        self.model = self.chatgpt_config.get('model', 'gpt-4o-mini')
         self.timeout = self.chatgpt_config.get('timeout', 30)
         self.max_retries = self.chatgpt_config.get('max_retries', 3)
         self.retry_delay = self.chatgpt_config.get('retry_delay', 2)
