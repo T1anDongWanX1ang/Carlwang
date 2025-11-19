@@ -170,7 +170,7 @@ class QuotationCrawler:
             tweets = []
             for api_data in api_data_list:
                 try:
-                    tweet = self.data_mapper.map_tweet_api_to_model(api_data)
+                    tweet = self.data_mapper.map_api_data_to_tweet(api_data)
                     if tweet and tweet.validate():
                         tweets.append(tweet)
                 except Exception as e:
@@ -193,7 +193,7 @@ class QuotationCrawler:
                     if user_data and isinstance(user_data, dict):
                         user_id = user_data.get('id_str')
                         if user_id and user_id not in seen_user_ids:
-                            user = self.data_mapper.map_user_api_to_model(user_data)
+                            user = self.data_mapper.map_api_data_to_user(user_data)
                             if user and user.validate():
                                 users.append(user)
                                 seen_user_ids.add(user_id)
@@ -205,7 +205,7 @@ class QuotationCrawler:
                         if quoted_user_data and isinstance(quoted_user_data, dict):
                             quoted_user_id = quoted_user_data.get('id_str')
                             if quoted_user_id and quoted_user_id not in seen_user_ids:
-                                quoted_user = self.data_mapper.map_user_api_to_model(quoted_user_data)
+                                quoted_user = self.data_mapper.map_api_data_to_user(quoted_user_data)
                                 if quoted_user and quoted_user.validate():
                                     users.append(quoted_user)
                                     seen_user_ids.add(quoted_user_id)
