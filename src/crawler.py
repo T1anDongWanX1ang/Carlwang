@@ -8,10 +8,12 @@ from datetime import datetime
 from .api.twitter_api import twitter_api
 from .database.tweet_dao import tweet_dao
 from .database.user_dao import user_dao
+from .database.quotation_dao import quotation_dao
 from .utils.data_mapper import data_mapper
 from .utils.config_manager import config
 from .utils.logger import get_logger
 from .utils.tweet_enricher import tweet_enricher
+from .utils.quotation_extractor import quotation_extractor
 # from .utils.user_language_integration import UserLanguageIntegration  # 语言检测已禁用
 from .models.tweet import Tweet
 from .models.user import TwitterUser
@@ -29,11 +31,13 @@ class TwitterCrawler:
         self.api_client = twitter_api
         self.tweet_dao = tweet_dao
         self.user_dao = user_dao
+        self.quotation_dao = quotation_dao
         self.data_mapper = data_mapper
         self.topic_engine = topic_engine
         # self.kol_engine = kol_engine  # KOL分析已禁用
         self.project_engine = project_engine
         self.tweet_enricher = tweet_enricher
+        self.quotation_extractor = quotation_extractor
 
         # 初始化用户语言集成器（已禁用）
         # from .api.chatgpt_client import chatgpt_client
@@ -107,7 +111,13 @@ class TwitterCrawler:
                     self.logger.warning(f"构建用户数据映射失败: {e}")
                     continue
             
-            # 2.3 增强推文数据（添加 kol_id 和 entity_id）
+            # 2.3 提取引用关系数据
+            self.logger.info("开始提取引用关系数据...")
+            quotations = self.quotation_extractor.extract_quotations_from_api_data(api_data_list)
+            valid_quotations = self.quotation_extractor.filter_valid_quotations(quotations)
+            self.logger.info(f"引用关系数据提取完成，获得 {len(valid_quotations)} 条有效引用关系")
+            
+            # 2.4 增强推文数据（添加 kol_id 和 entity_id）
             self.logger.info("开始增强推文数据...")
             enriched_tweets = self.tweet_enricher.enrich_tweets(tweets, user_data_map)
             self.logger.info(f"推文增强完成，处理了 {len(enriched_tweets)} 条推文")
@@ -120,6 +130,12 @@ class TwitterCrawler:
             
             # 然后保存增强后的推文数据
             tweet_saved_count = self._save_tweets_to_database(enriched_tweets)
+            
+            # 保存引用关系数据
+            quotation_saved_count = 0
+            if valid_quotations:
+                quotation_saved_count = self._save_quotations_to_database(valid_quotations)
+                self.logger.info(f"成功保存 {quotation_saved_count} 条引用关系数据")
             
             # 4. 话题分析和生成（如果推文保存成功）
             if tweet_saved_count > 0:
@@ -421,6 +437,37 @@ class TwitterCrawler:
         except Exception as e:
             self.logger.error(f"保存推文到数据库失败: {e}")
             return 0
+    
+    def _save_quotations_to_database(self, quotations: List[Dict[str, Any]]) -> int:
+        """
+        保存引用关系到数据库
+        
+        Args:
+            quotations: 引用关系数据列表
+            
+        Returns:
+            成功保存的数量
+        """
+        try:
+            if not quotations:
+                self.logger.info("没有引用关系数据需要保存")
+                return 0
+            
+            # 确保数据表存在
+            if not self.quotation_dao.create_table_if_not_exists():
+                self.logger.error("创建引用关系表失败")
+                return 0
+            
+            self.logger.info(f"开始保存 {len(quotations)} 条引用关系到数据库...")
+            
+            # 批量保存
+            saved_count = self.quotation_dao.batch_insert_quotations(quotations)
+            
+            return saved_count
+            
+        except Exception as e:
+            self.logger.error(f"保存引用关系到数据库失败: {e}")
+            return 0
 
     def _detect_and_structure_activities(self, tweets: List[Tweet]) -> bool:
         """
@@ -601,6 +648,7 @@ class TwitterCrawler:
             'api_stats': self.api_client.get_request_stats(),
             'database_tweet_count': self.tweet_dao.get_tweet_count(),
             'database_user_count': self.user_dao.get_user_count(),
+            'database_quotation_count': self.quotation_dao.get_quotation_count(),
             'topic_stats': self.topic_engine.get_topic_statistics(),
             # 'kol_stats': self.kol_engine.get_kol_statistics(),  # KOL分析已禁用
             'project_stats': self.project_engine.get_project_statistics()
@@ -621,6 +669,7 @@ class TwitterCrawler:
             self.api_client.close()
             self.tweet_dao.db_manager.close()
             self.user_dao.db_manager.close()
+            self.quotation_dao.db_manager.close()
             self.logger.info("爬虫资源已清理")
         except Exception as e:
             self.logger.error(f"清理爬虫资源时出错: {e}")
