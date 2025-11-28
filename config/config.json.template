@@ -9,7 +9,8 @@
       "ApiKey": "YOUR_TWEETSCOUT_API_KEY"
     },
     "default_params": {
-      "list_id": "1896516371435122886"
+      "list_id": "1896516371435122886",
+      "list_ids": ["1896516371435122886", "NEW_LIST_ID"]
     },
     "pagination": {
       "page_size": 100,

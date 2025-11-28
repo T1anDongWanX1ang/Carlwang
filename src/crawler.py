@@ -54,13 +54,14 @@ class TwitterCrawler:
         
         self.logger.info("Twitter爬虫初始化完成")
     
-    def crawl_tweets(self, list_id: str = None, max_pages: int = None, 
+    def crawl_tweets(self, list_id: str = None, list_ids: List[str] = None, max_pages: int = None, 
                     page_size: int = None, hours_limit: int = 2) -> bool:
         """
         爬取推文数据
         
         Args:
-            list_id: 列表ID，如果不指定则使用配置中的默认值
+            list_id: 单个列表ID，如果不指定则使用配置中的默认值（向后兼容）
+            list_ids: 多个列表ID列表，优先级高于list_id
             max_pages: 最大页数（不超过15页）
             page_size: 每页大小
             hours_limit: 时间限制（小时），只拉取过去N小时的推文，默认2小时（生产环境使用UTC时间）
@@ -74,8 +75,8 @@ class TwitterCrawler:
         try:
             self.logger.info(f"开始爬取推文数据 (第 {self.crawl_count} 次，时间限制: {hours_limit}小时)")
             
-            # 1. 从API获取数据（最多15页，只拉取过去8小时）
-            api_data_list = self._fetch_api_data(list_id, max_pages, page_size, hours_limit)
+            # 1. 从API获取数据（支持多个list并行处理，最多15页，只拉取过去8小时）
+            api_data_list = self._fetch_api_data(list_id, list_ids, max_pages, page_size, hours_limit)
             
             if not api_data_list:
                 self.logger.warning("未获取到任何API数据")
@@ -205,13 +206,14 @@ class TwitterCrawler:
             self.error_count += 1
             return False
     
-    def _fetch_api_data(self, list_id: str = None, max_pages: int = None, 
+    def _fetch_api_data(self, list_id: str = None, list_ids: List[str] = None, max_pages: int = None, 
                        page_size: int = None, hours_limit: int = 2) -> List[Dict[str, Any]]:
         """
-        从API获取数据
+        从API获取数据（支持并行获取多个list）
         
         Args:
-            list_id: 列表ID
+            list_id: 单个列表ID（向后兼容）
+            list_ids: 多个列表ID列表，优先级高于list_id
             max_pages: 最大页数（不超过15页）
             page_size: 每页大小
             hours_limit: 时间限制（小时），只拉取过去N小时的推文
@@ -220,25 +222,74 @@ class TwitterCrawler:
             API数据列表
         """
         try:
-            # 使用配置的默认值或传入的参数
-            if list_id is None:
-                list_id = config.get('api.default_params.list_id')
+            # 确定要使用的list_ids列表
+            if list_ids is not None:
+                # 优先使用传入的list_ids
+                target_list_ids = list_ids
+            elif list_id is not None:
+                # 向后兼容：如果只传入了单个list_id，转换为列表
+                target_list_ids = [list_id]
+            else:
+                # 使用配置文件中的默认值
+                target_list_ids = config.get('api.default_params.list_ids', [config.get('api.default_params.list_id')])
             
-            self.logger.info(f"正在从API获取数据，list_id: {list_id}, 时间限制: {hours_limit}小时")
+            self.logger.info(f"正在并行获取 {len(target_list_ids)} 个list的数据: {target_list_ids}, 时间限制: {hours_limit}小时")
             
-            # 获取所有推文数据（最多15页，只拉取过去8小时）
-            api_data_list = self.api_client.fetch_all_tweets(
-                list_id=list_id,
-                max_pages=max_pages,
-                page_size=page_size,
-                hours_limit=hours_limit
-            )
+            # 如果只有一个list，使用原有的串行逻辑
+            if len(target_list_ids) == 1:
+                list_id_single = target_list_ids[0]
+                self.logger.info(f"单个list模式，list_id: {list_id_single}")
+                
+                api_data_list = self.api_client.fetch_all_tweets(
+                    list_id=list_id_single,
+                    max_pages=max_pages,
+                    page_size=page_size,
+                    hours_limit=hours_limit
+                )
+                
+                # 获取API请求统计
+                stats = self.api_client.get_request_stats()
+                self.logger.info(f"API请求统计: {stats}")
+                
+                return api_data_list
+            
+            # 多个list的并行处理逻辑
+            import concurrent.futures
+            
+            all_api_data = []
+            
+            # 使用线程池并行获取多个list的数据
+            with concurrent.futures.ThreadPoolExecutor(max_workers=len(target_list_ids)) as executor:
+                # 提交所有任务
+                future_to_list_id = {
+                    executor.submit(
+                        self.api_client.fetch_all_tweets,
+                        list_id=single_list_id,
+                        max_pages=max_pages,
+                        page_size=page_size,
+                        hours_limit=hours_limit
+                    ): single_list_id for single_list_id in target_list_ids
+                }
+                
+                # 收集结果
+                for future in concurrent.futures.as_completed(future_to_list_id):
+                    single_list_id = future_to_list_id[future]
+                    try:
+                        api_data = future.result()
+                        if api_data:
+                            self.logger.info(f"list_id {single_list_id} 获取到 {len(api_data)} 条数据")
+                            all_api_data.extend(api_data)
+                        else:
+                            self.logger.warning(f"list_id {single_list_id} 未获取到数据")
+                    except Exception as e:
+                        self.logger.error(f"获取 list_id {single_list_id} 数据失败: {e}")
             
             # 获取API请求统计
             stats = self.api_client.get_request_stats()
-            self.logger.info(f"API请求统计: {stats}")
+            self.logger.info(f"并行API请求统计: {stats}")
+            self.logger.info(f"总共获取到 {len(all_api_data)} 条API数据")
             
-            return api_data_list
+            return all_api_data
             
         except Exception as e:
             self.logger.error(f"从API获取数据失败: {e}")
