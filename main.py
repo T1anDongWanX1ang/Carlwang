@@ -29,7 +29,6 @@ def main():
     parser = argparse.ArgumentParser(description='Twitter数据爬虫')
     parser.add_argument('--mode', choices=['once', 'schedule', 'test', 'topic', 'project'], default='once',
                        help='运行模式: once=单次执行, schedule=定时调度, test=测试连接, topic=话题分析, project=项目分析')
-    parser.add_argument('--list-id', type=str, help='Twitter列表ID')
     parser.add_argument('--max-pages', type=int, help='最大页数')
     parser.add_argument('--page-size', type=int, help='每页大小')
     parser.add_argument('--interval', type=int, help='调度间隔(分钟)')
@@ -105,9 +104,8 @@ def run_once(args):
     
     logger.info("开始单次数据爬取...")
     
-    # 执行爬取
+    # 执行爬取（直接使用配置文件中的list_ids进行并行获取）
     success = crawler.crawl_tweets(
-        list_id=args.list_id,
         max_pages=args.max_pages,
         page_size=args.page_size
     )
@@ -144,9 +142,8 @@ def run_scheduled(args):
         """定时爬取任务（包含项目分析）"""
         logger.info("执行定时爬取任务...")
         
-        # 执行爬取
+        # 执行爬取（直接使用配置文件中的list_ids进行并行获取）
         crawl_success = crawler.crawl_tweets(
-            list_id=args.list_id,
             max_pages=args.max_pages,
             page_size=args.page_size
         )
