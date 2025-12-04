@@ -80,10 +80,14 @@ def check_config():
         print(f"   📋 实际使用的 Model: {actual_model}")
         
         # 检查 API key 格式
-        if actual_key.startswith('cr_'):
-            print("   ✅ API Key 格式看起来像 Gemini API Key")
-        elif actual_key.startswith('AIza'):
-            print("   ✅ API Key 格式看起来像 Google API Key")
+        if actual_key.startswith('AIza'):
+            print("   ✅ API Key 格式正确（标准 Google Gemini API Key）")
+        elif actual_key.startswith('cr_'):
+            print("   ⚠️  API Key 格式异常：以 'cr_' 开头")
+            print("   ❌ 这不是标准的 Google Gemini API Key！")
+            print("   💡 标准 Gemini API Key 应该以 'AIza' 开头")
+            print("   💡 请访问 https://aistudio.google.com/apikey 获取正确的 API Key")
+            print("   💡 如果这是代理服务的 key，可能需要修改代码支持代理")
         elif actual_key.startswith('sk-'):
             print("   ⚠️  API Key 格式看起来像 OpenAI API Key")
             print("   ❌ 错误: 这是 OpenAI API Key，不是 Gemini API Key！")
@@ -111,9 +115,15 @@ def check_config():
                 
                 if 'API key not valid' in error_str or 'INVALID_ARGUMENT' in error_str:
                     print("\n   💡 问题诊断:")
-                    print("      - API Key 无效或已过期")
-                    print("      - 请检查 API Key 是否正确")
-                    print("      - 确保使用的是 Gemini API Key，不是 OpenAI API Key")
+                    if actual_key.startswith('cr_'):
+                        print("      - ❌ API Key 格式错误：以 'cr_' 开头")
+                        print("      - ❌ 这不是标准的 Google Gemini API Key")
+                        print("      - ✅ 标准 Gemini API Key 应该以 'AIza' 开头，约39个字符")
+                        print("      - 📖 获取方法：访问 https://aistudio.google.com/apikey")
+                    else:
+                        print("      - API Key 无效或已过期")
+                        print("      - 请检查 API Key 是否正确")
+                        print("      - 确保使用的是 Gemini API Key，不是 OpenAI API Key")
                     if openai_key:
                         print("      - ⚠️  检测到 OPENAI_API_KEY 环境变量，可能覆盖了正确的 Gemini Key")
         else:
