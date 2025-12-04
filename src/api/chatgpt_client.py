@@ -1,29 +1,30 @@
 """
-ChatGPT API 客户端
+Gemini API 客户端
 用于话题分析、内容生成和情感分析
 """
-import openai
 import json
 import logging
 from typing import Dict, Any, List, Optional, Tuple
 import time
 
+from google import genai
+
 from ..utils.config_manager import config
 
 
 class ChatGPTClient:
-    """ChatGPT API客户端"""
+    """Gemini API客户端"""
     
     def __init__(self):
-        """初始化ChatGPT客户端"""
+        """初始化Gemini客户端"""
         self.chatgpt_config = config.get('chatgpt', {})
         self.api_key = self.chatgpt_config.get('api_key', '')
-        self.model = self.chatgpt_config.get('model', 'gpt-4o-mini')
+        self.model = self.chatgpt_config.get('model', 'gemini-2.5-flash-lite')
         self.timeout = self.chatgpt_config.get('timeout', 30)
         self.max_retries = self.chatgpt_config.get('max_retries', 3)
         self.retry_delay = self.chatgpt_config.get('retry_delay', 2)
         
-        # 延迟初始化OpenAI客户端，避免模块导入时的问题
+        # 延迟初始化客户端，避免模块导入时的问题
         self.client = None
         
         self.logger = logging.getLogger(__name__)
@@ -47,64 +48,89 @@ class ChatGPTClient:
         self.cache_ttl_hours = opt_config.get('cache_ttl_hours', 24)
         
         # 打印模型配置信息
-        self.logger.info(f"🤖 ChatGPT客户端初始化完成")
+        self.logger.info(f"🤖 Gemini客户端初始化完成")
         self.logger.info(f"📋 使用模型: {self.model}")
         self.logger.info(f"🔑 API密钥: {self.api_key[:10]}...{self.api_key[-4:] if len(self.api_key) > 14 else '*' * 4}")
         self.logger.info(f"⚙️  超时设置: {self.timeout}秒，最大重试: {self.max_retries}次")
     
     def _get_client(self):
-        """获取OpenAI客户端（延迟初始化）"""
+        """获取Gemini客户端（延迟初始化）"""
         if self.client is None:
-            self.client = openai.OpenAI(api_key=self.api_key)
+            self.client = genai.Client(api_key=self.api_key)
         return self.client
     
     def _make_request(self, messages: List[Dict[str, str]], **kwargs) -> Optional[str]:
         """
-        发起ChatGPT API请求，包含重试机制
+        发起Gemini API请求，包含重试机制
         
         Args:
             messages: 对话消息列表
-            **kwargs: 其他参数
+            **kwargs: 其他参数（temperature, max_tokens等，Gemini可能不支持所有参数）
             
         Returns:
             生成的文本内容或None
         """
         for attempt in range(self.max_retries):
             try:
-                self.logger.debug(f"发起ChatGPT请求 (尝试 {attempt + 1}/{self.max_retries})")
+                self.logger.debug(f"发起Gemini请求 (尝试 {attempt + 1}/{self.max_retries})")
                 
-                response = self._get_client().chat.completions.create(
-                    model=self.model,
-                    messages=messages,
-                    timeout=self.timeout,
-                    **kwargs
-                )
+                # Gemini API调用
+                client = self._get_client()
+                chat = client.chats.create(model=self.model)
+                
+                # 将messages转换为Gemini格式
+                # Gemini使用单条消息，需要合并system和user消息
+                system_content = ""
+                user_content = ""
+                for msg in messages:
+                    role = msg.get('role', 'user')
+                    content = msg.get('content', '')
+                    if role == 'system':
+                        system_content = content
+                    elif role == 'user':
+                        if user_content:
+                            user_content += "\n\n" + content
+                        else:
+                            user_content = content
+                
+                # 合并system和user内容
+                if system_content:
+                    prompt = f"{system_content}\n\n{user_content}"
+                else:
+                    prompt = user_content
+                
+                response = chat.send_message(prompt)
+                content = response.text
                 
                 self.request_count += 1
                 self.success_count += 1
                 
-                # 提取生成的内容
-                content = response.choices[0].message.content
-                self.logger.debug(f"ChatGPT请求成功，生成内容长度: {len(content)}")
+                self.logger.debug(f"Gemini请求成功，生成内容长度: {len(content)}")
                 
                 return content
                 
-            except getattr(openai, 'RateLimitError', Exception) as e:
-                self.logger.warning(f"ChatGPT速率限制，等待 {self.retry_delay} 秒后重试")
-                self.logger.error(f"RateLimitError详情: {str(e)}")
-                time.sleep(self.retry_delay * (attempt + 1))
-                continue
-                
-            except getattr(openai, 'APIError', Exception) as e:
-                self.logger.error(f"ChatGPT API错误: {e}")
-                if attempt < self.max_retries - 1:
-                    time.sleep(self.retry_delay)
-                    continue
-                else:
-                    break
-                    
             except Exception as e:
-                self.logger.error(f"ChatGPT请求异常: {e}")
+                error_type = type(e).__name__
+                error_str = str(e).lower()
+                
+                # 处理速率限制错误
+                if 'RateLimitError' in error_type or 'rate_limit' in error_str or '429' in error_str or 'quota' in error_str:
+                    self.logger.warning(f"Gemini速率限制，等待 {self.retry_delay} 秒后重试")
+                    self.logger.error(f"RateLimitError详情: {str(e)}")
+                    time.sleep(self.retry_delay * (attempt + 1))
+                    continue
+                
+                # 处理API错误
+                if 'APIError' in error_type or 'api' in error_str or '400' in error_str or '500' in error_str:
+                    self.logger.error(f"Gemini API错误: {e}")
+                    if attempt < self.max_retries - 1:
+                        time.sleep(self.retry_delay)
+                        continue
+                    else:
+                        break
+                
+                # 其他异常
+                self.logger.error(f"Gemini请求异常: {e}")
                 if attempt < self.max_retries - 1:
                     time.sleep(self.retry_delay)
                     continue
