@@ -1,13 +1,20 @@
 """
 Gemini API 客户端
 用于话题分析、内容生成和情感分析
+支持标准 Gemini API 和代理服务
 """
 import json
 import logging
 from typing import Dict, Any, List, Optional, Tuple
 import time
 
-from google import genai
+try:
+    from google import genai
+    from google.genai import types
+    GENAI_TYPES_AVAILABLE = True
+except ImportError:
+    GENAI_TYPES_AVAILABLE = False
+    types = None
 
 from ..utils.config_manager import config
 
@@ -23,6 +30,9 @@ class ChatGPTClient:
         self.timeout = self.chatgpt_config.get('timeout', 30)
         self.max_retries = self.chatgpt_config.get('max_retries', 3)
         self.retry_delay = self.chatgpt_config.get('retry_delay', 2)
+        
+        # 支持自定义 API 端点（用于代理服务）
+        self.base_url = self.chatgpt_config.get('base_url', None)
         
         # 延迟初始化客户端，避免模块导入时的问题
         self.client = None
@@ -54,9 +64,15 @@ class ChatGPTClient:
         self.logger.info(f"⚙️  超时设置: {self.timeout}秒，最大重试: {self.max_retries}次")
     
     def _get_client(self):
-        """获取Gemini客户端（延迟初始化）"""
+        """获取Gemini客户端（延迟初始化），支持自定义端点"""
         if self.client is None:
-            self.client = genai.Client(api_key=self.api_key)
+            # 如果配置了自定义 base_url（代理服务），使用 HttpOptions
+            if self.base_url and GENAI_TYPES_AVAILABLE:
+                http_options = types.HttpOptions(base_url=self.base_url)
+                self.client = genai.Client(api_key=self.api_key, http_options=http_options)
+            else:
+                # 标准 Gemini API
+                self.client = genai.Client(api_key=self.api_key)
         return self.client
     
     def _make_request(self, messages: List[Dict[str, str]], **kwargs) -> Optional[str]:
