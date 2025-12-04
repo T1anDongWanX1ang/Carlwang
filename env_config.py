@@ -28,10 +28,17 @@ def load_config_with_env():
     if os.getenv('TWEETSCOUT_API_KEY'):
         config['api']['headers']['ApiKey'] = os.getenv('TWEETSCOUT_API_KEY')
     
-    # OpenAI API
-    if os.getenv('OPENAI_API_KEY'):
+    # Gemini/OpenAI API (支持环境变量覆盖)
+    # 优先使用 GEMINI_API_KEY，如果没有则使用 OPENAI_API_KEY（向后兼容）
+    if os.getenv('GEMINI_API_KEY'):
+        config['chatgpt']['api_key'] = os.getenv('GEMINI_API_KEY')
+    elif os.getenv('OPENAI_API_KEY'):
         config['chatgpt']['api_key'] = os.getenv('OPENAI_API_KEY')
-    if os.getenv('OPENAI_MODEL'):
+    
+    # 模型配置
+    if os.getenv('GEMINI_MODEL'):
+        config['chatgpt']['model'] = os.getenv('GEMINI_MODEL')
+    elif os.getenv('OPENAI_MODEL'):
         config['chatgpt']['model'] = os.getenv('OPENAI_MODEL')
     
     # 数据库配置
@@ -49,7 +56,7 @@ def load_config_with_env():
     # 验证必要的配置
     required_configs = [
         ('TweetScout API Key', config['api']['headers'].get('ApiKey')),
-        ('OpenAI API Key', config['chatgpt'].get('api_key')),
+        ('Gemini/OpenAI API Key', config['chatgpt'].get('api_key')),
         ('Database Host', config['database'].get('host')),
         ('Database Password', config['database'].get('password'))
     ]
@@ -73,7 +80,11 @@ def create_env_file():
 # TweetScout API配置
 TWEETSCOUT_API_KEY=your-tweetscout-api-key
 
-# OpenAI API配置  
+# Gemini API配置（优先）
+GEMINI_API_KEY=your-gemini-api-key
+GEMINI_MODEL=gemini-2.5-flash-lite
+
+# OpenAI API配置（向后兼容，如果使用OpenAI）
 OPENAI_API_KEY=your-openai-api-key
 OPENAI_MODEL=gpt-4o-mini
 
