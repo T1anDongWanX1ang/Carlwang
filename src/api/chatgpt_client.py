@@ -61,6 +61,10 @@ class ChatGPTClient:
         self.logger.info(f"🤖 Gemini客户端初始化完成")
         self.logger.info(f"📋 使用模型: {self.model}")
         self.logger.info(f"🔑 API密钥: {self.api_key[:10]}...{self.api_key[-4:] if len(self.api_key) > 14 else '*' * 4}")
+        if self.base_url:
+            self.logger.info(f"🌐 使用代理服务: {self.base_url}")
+        else:
+            self.logger.info(f"🌐 使用标准 Gemini API")
         self.logger.info(f"⚙️  超时设置: {self.timeout}秒，最大重试: {self.max_retries}次")
     
     def _get_client(self):
