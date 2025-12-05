@@ -44,6 +44,7 @@ class Tweet:
     project_tag: Optional[str] = None  # 项目标签（匹配RootData的项目名称）
     is_announce: Optional[int] = 0  # 是否为重要公告（0=否，1=是）
     summary: Optional[str] = None  # AI总结（针对公告推文的简洁总结）
+    is_real_project_tweet: Optional[int] = 0  # 是否为项目官方推文（0=否，1=是，通过kol_id匹配twitter_kol_token_project表判断）
 
     def __post_init__(self):
         """初始化后处理"""
@@ -197,7 +198,8 @@ class Tweet:
             'token_tag': self.token_tag,
             'project_tag': self.project_tag,
             'is_announce': self.is_announce,
-            'summary': self.summary
+            'summary': self.summary,
+            'is_real_project_tweet': getattr(self, 'is_real_project_tweet', 0)
         }
     
     def validate(self) -> bool:

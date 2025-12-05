@@ -11,6 +11,7 @@ from ..api.chatgpt_client import chatgpt_client
 from ..database.topic_dao import topic_dao
 from ..database.kol_dao import kol_dao
 from ..database.project_dao import ProjectDAO
+from ..database.connection import db_manager
 from ..models.tweet import Tweet
 from ..models.topic import Topic
 from ..models.project import Project
@@ -34,6 +35,10 @@ class TweetEnricher:
         # 缓存已知的KOL用户ID，避免重复查询
         self._kol_user_cache = {}
         self._refresh_kol_cache()
+        
+        # 缓存项目kol_id，避免重复查询
+        self._project_kol_cache = {}
+        self._refresh_project_kol_cache()
     
     def _refresh_kol_cache(self):
         """刷新KOL用户缓存"""
@@ -44,6 +49,55 @@ class TweetEnricher:
         except Exception as e:
             self.logger.error(f"刷新KOL缓存失败: {e}")
             self._kol_user_cache = {}
+    
+    def _refresh_project_kol_cache(self):
+        """刷新项目KOL缓存（从twitter_kol_token_project表）"""
+        try:
+            # 查询twitter_kol_token_project表，获取所有项目的kol_id
+            sql = "SELECT DISTINCT id as kol_id FROM twitter_kol_token_project WHERE id IS NOT NULL AND id != ''"
+            results = db_manager.execute_query(sql)
+            
+            if results:
+                self._project_kol_cache = {row['kol_id'] for row in results}
+                self.logger.info(f"刷新项目KOL缓存，找到 {len(self._project_kol_cache)} 个项目KOL")
+            else:
+                self._project_kol_cache = set()
+                self.logger.warning("twitter_kol_token_project表中没有找到项目数据")
+        except Exception as e:
+            self.logger.error(f"刷新项目KOL缓存失败: {e}")
+            self._project_kol_cache = set()
+    
+    def _is_project_kol(self, kol_id: Optional[str]) -> bool:
+        """
+        检查kol_id是否是项目官方账号（通过twitter_kol_token_project表判断）
+        
+        Args:
+            kol_id: KOL用户ID
+            
+        Returns:
+            如果是项目官方账号返回True，否则返回False
+        """
+        if not kol_id:
+            return False
+        
+        # 先检查缓存
+        if kol_id in self._project_kol_cache:
+            return True
+        
+        # 如果缓存中没有，查询数据库
+        try:
+            sql = "SELECT COUNT(*) as count FROM twitter_kol_token_project WHERE id = %s"
+            results = db_manager.execute_query(sql, (kol_id,))
+            
+            if results and results[0]['count'] > 0:
+                # 添加到缓存
+                self._project_kol_cache.add(kol_id)
+                return True
+            
+            return False
+        except Exception as e:
+            self.logger.error(f"查询项目KOL失败: {e}")
+            return False
     
     def enrich_tweets(self, tweets: List[Tweet], 
                      user_data_map: Dict[str, Dict[str, Any]]) -> List[Tweet]:
@@ -141,17 +195,30 @@ class TweetEnricher:
                     token_tag = self._extract_token_symbols(tweet.full_text)
                     tweet.token_tag = token_tag
 
-                # 4.4 对所有有效推文判断是否为重要公告（不区分项目/话题）
-                is_announce = self._classify_announcement(tweet.full_text)
-                tweet.is_announce = is_announce
+                # 4.4 检查是否是项目官方推文
+                is_project_kol = self._is_project_kol(tweet.kol_id)
+                if is_project_kol:
+                    tweet.is_real_project_tweet = 1
+                    self.logger.debug(f"推文 {tweet.id_str} 的kol_id {tweet.kol_id} 是项目官方账号")
+                else:
+                    tweet.is_real_project_tweet = 0
 
-                # 4.5 对于公告推文，生成AI总结
-                if is_announce == 1:
-                    announce_summary = self._generate_announcement_summary(tweet.full_text)
-                    tweet.summary = announce_summary
-                    self.logger.info(f"推文 {tweet.id_str} 公告总结: {announce_summary}")
+                # 4.5 只对项目官方推文判断是否为重要公告
+                if is_project_kol:
+                    is_announce = self._classify_announcement(tweet.full_text)
+                    tweet.is_announce = is_announce
 
-                self.logger.info(f"推文 {tweet.id_str} 增强完成: kol_id={kol_id}, valid={is_valid}, sentiment={sentiment}, project_id={tweet.project_id}, topic_id={tweet.topic_id}, entity_id={tweet.entity_id}, project_tag={tweet.project_tag}, token_tag={tweet.token_tag}, is_announce={tweet.is_announce}, url={tweet_url}")
+                    # 4.6 对于公告推文，生成AI总结
+                    if is_announce == 1:
+                        announce_summary = self._generate_announcement_summary(tweet.full_text)
+                        tweet.summary = announce_summary
+                        self.logger.info(f"推文 {tweet.id_str} 公告总结: {announce_summary}")
+                else:
+                    # 非项目官方推文不判断公告
+                    tweet.is_announce = 0
+                    tweet.summary = None
+
+                self.logger.info(f"推文 {tweet.id_str} 增强完成: kol_id={kol_id}, valid={is_valid}, sentiment={sentiment}, project_id={tweet.project_id}, topic_id={tweet.topic_id}, entity_id={tweet.entity_id}, project_tag={tweet.project_tag}, token_tag={tweet.token_tag}, is_real_project_tweet={tweet.is_real_project_tweet}, is_announce={tweet.is_announce}, url={tweet_url}")
             else:
                 # 无效推文不进行话题分析和情绪分析
                 tweet.sentiment = None
@@ -161,7 +228,12 @@ class TweetEnricher:
                 tweet.project_tag = None
                 tweet.token_tag = None  # 无效推文也不提取token
                 tweet.is_announce = 0  # 无效推文不是公告
-                self.logger.info(f"推文 {tweet.id_str} 标记为无效，kol_id={kol_id}, url={tweet_url}")
+                
+                # 即使无效推文，也检查是否是项目官方推文
+                is_project_kol = self._is_project_kol(tweet.kol_id)
+                tweet.is_real_project_tweet = 1 if is_project_kol else 0
+                
+                self.logger.info(f"推文 {tweet.id_str} 标记为无效，kol_id={kol_id}, is_real_project_tweet={tweet.is_real_project_tweet}, url={tweet_url}")
             
             return tweet
             
