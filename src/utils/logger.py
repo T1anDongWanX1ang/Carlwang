@@ -74,6 +74,12 @@ def setup_logger(name: Optional[str] = None) -> logging.Logger:
         openai_logger = logging.getLogger('openai')
         openai_logger.setLevel(logging.WARNING)
 
+        # 抑制Google Gemini的详细日志
+        google_genai_logger = logging.getLogger('google_genai')
+        google_genai_logger.setLevel(logging.WARNING)
+        logging.getLogger('google_genai.models').setLevel(logging.WARNING)
+        logging.getLogger('google.genai').setLevel(logging.WARNING)
+
         # 抑制urllib3的详细debug日志
         urllib3_logger = logging.getLogger('urllib3')
         urllib3_logger.setLevel(logging.WARNING)

@@ -39,6 +39,10 @@ class ChatGPTClient:
         
         self.logger = logging.getLogger(__name__)
         
+        # 抑制 Google Gemini 库的详细日志输出
+        logging.getLogger('google_genai.models').setLevel(logging.WARNING)
+        logging.getLogger('google.genai').setLevel(logging.WARNING)
+        
         # 请求统计
         self.request_count = 0
         self.success_count = 0
