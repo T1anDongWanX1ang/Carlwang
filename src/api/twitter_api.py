@@ -253,9 +253,15 @@ class TwitterAPIClient:
                     if created_at_str:
                         # 使用 dateutil 解析各种格式的日期
                         tweet_time = date_parser.parse(created_at_str)
-                        # 移除时区信息以便比较
+                        # 如果是UTC时间，转换为本地时间进行比较
                         if tweet_time.tzinfo:
-                            tweet_time = tweet_time.replace(tzinfo=None)
+                            # 转换为本地时间
+                            tweet_time = tweet_time.astimezone().replace(tzinfo=None)
+                        # 如果没有时区信息但格式符合UTC标准(+0000结尾)，假设为UTC
+                        elif created_at_str.endswith('+0000') or 'GMT' in created_at_str or 'UTC' in created_at_str:
+                            from datetime import timezone
+                            # 将其视为UTC时间并转换为本地时间
+                            tweet_time = tweet_time.replace(tzinfo=timezone.utc).astimezone().replace(tzinfo=None)
                         
                         # 更新该项目的最新推文时间
                         if user_id not in project_latest_times or tweet_time > project_latest_times[user_id]:
