@@ -233,8 +233,10 @@ class TwitterAPIClient:
                 self.logger.info(f"第 {page} 页没有数据，停止分页")
                 break
             
-            # 过滤推文：只保留过去8小时内的
+            # 过滤推文：只保留过去hours_limit小时内的
             valid_tweets = []
+            old_tweet_count = 0  # 记录超时推文数量
+            
             for tweet in tweets:
                 try:
                     # 尝试解析 created_at 字段
@@ -250,11 +252,10 @@ class TwitterAPIClient:
                         if tweet_time >= time_cutoff:
                             valid_tweets.append(tweet)
                         else:
-                            # 推文太旧，停止拉取
+                            # 推文太旧，记录但继续处理其他推文
+                            old_tweet_count += 1
                             filtered_tweets += 1
-                            self.logger.debug(f"推文时间 {tweet_time} 超过{hours_limit}小时限制，停止拉取")
-                            stopped_by_time = True
-                            break
+                            self.logger.debug(f"推文时间 {tweet_time} 超过{hours_limit}小时限制，跳过")
                     else:
                         # 如果没有 created_at 字段，保留该推文
                         valid_tweets.append(tweet)
@@ -264,6 +265,17 @@ class TwitterAPIClient:
                     # 解析失败，保留该推文
                     self.logger.warning(f"解析推文时间失败，已保留: {e}")
                     valid_tweets.append(tweet)
+            
+            # 判断是否应该停止分页：
+            # 如果这一页中超时推文数量超过总数的80%，说明数据已经很旧了，可以停止
+            # 或者如果这一页没有任何有效推文，也可以停止
+            old_tweet_ratio = old_tweet_count / len(tweets) if tweets else 0
+            if old_tweet_ratio >= 0.8:
+                stopped_by_time = True
+                self.logger.info(f"本页超时推文比例过高 ({old_tweet_ratio:.1%})，停止拉取更多页面")
+            elif len(valid_tweets) == 0 and old_tweet_count > 0:
+                stopped_by_time = True
+                self.logger.info(f"本页无有效推文且存在超时推文，停止拉取更多页面")
             
             total_tweets += len(valid_tweets)
             self.logger.info(f"第 {page} 页获取到 {len(tweets)} 条推文，过滤后 {len(valid_tweets)} 条，累计 {total_tweets} 条有效推文")
