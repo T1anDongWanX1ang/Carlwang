@@ -95,7 +95,7 @@ start_service() {
     fi
     
     print_info "启动推文数据爬取服务..."
-    print_info "配置: 间隔=${interval}分钟, 页数=${max_pages}（最多50页）, 每页=${page_size}条（实际由API决定）, 时间限制=5小时"
+    print_info "配置: 间隔=${interval}分钟, 页数=${max_pages}（最多50页）, 每页=${page_size}条（实际由API决定）, 时间限制=10小时"
     
     # 创建日志目录
     mkdir -p "$(dirname "$LOG_FILE")"
@@ -233,7 +233,7 @@ run_once() {
     local page_size=${2:-$DEFAULT_PAGE_SIZE}
     
     print_info "开始执行单次推文数据爬取..."
-    print_info "配置: 页数=${max_pages}（最多50页）, 每页=${page_size}条（实际由API决定）, 时间限制=5小时"
+    print_info "配置: 页数=${max_pages}（最多50页）, 每页=${page_size}条（实际由API决定）, 时间限制=10小时"
     
     # 创建日志目录
     mkdir -p "$(dirname "$LOG_FILE")"
