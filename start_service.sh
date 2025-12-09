@@ -14,6 +14,7 @@ LOG_FILE="$SCRIPT_DIR/service.log"
 DEFAULT_INTERVAL=60
 DEFAULT_MAX_PAGES=50
 DEFAULT_PAGE_SIZE=100
+DEFAULT_HOURS_LIMIT=3  # 智能时间检测：默认拉取过去3小时数据
 
 # 颜色输出
 RED='\033[0;31m'
@@ -87,6 +88,7 @@ start_service() {
     local interval=${1:-$DEFAULT_INTERVAL}
     local max_pages=${2:-$DEFAULT_MAX_PAGES}
     local page_size=${3:-$DEFAULT_PAGE_SIZE}
+    local hours_limit=${4:-$DEFAULT_HOURS_LIMIT}
     
     # 检查服务是否已在运行
     if check_status > /dev/null 2>&1; then
@@ -95,7 +97,8 @@ start_service() {
     fi
     
     print_info "启动推文数据爬取服务..."
-    print_info "配置: 间隔=${interval}分钟, 页数=${max_pages}（最多50页）, 每页=${page_size}条（实际由API决定）, 时间限制=10小时"
+    print_info "配置: 间隔=${interval}分钟, 页数=${max_pages}（最多15页）, 每页=${page_size}条（实际由API决定）"
+    print_info "智能时间检测: 拉取过去${hours_limit}小时数据，自动优化停止时机"
     
     # 创建日志目录
     mkdir -p "$(dirname "$LOG_FILE")"
@@ -111,13 +114,15 @@ start_service() {
         caffeinate -i nohup "$SCRIPT_DIR/venv/bin/python" main.py --mode schedule \
             --interval $interval \
             --max-pages $max_pages \
-            --page-size $page_size > "$LOG_FILE" 2>&1 &
+            --page-size $page_size \
+            --hours-limit $hours_limit > "$LOG_FILE" 2>&1 &
     else
         # Linux系统
         nohup nice -n -5 "$SCRIPT_DIR/venv/bin/python" main.py --mode schedule \
             --interval $interval \
             --max-pages $max_pages \
-            --page-size $page_size > "$LOG_FILE" 2>&1 &
+            --page-size $page_size \
+            --hours-limit $hours_limit > "$LOG_FILE" 2>&1 &
     fi
     
     local pid=$!
@@ -231,9 +236,11 @@ show_logs() {
 run_once() {
     local max_pages=${1:-$DEFAULT_MAX_PAGES}
     local page_size=${2:-$DEFAULT_PAGE_SIZE}
+    local hours_limit=${3:-$DEFAULT_HOURS_LIMIT}
     
     print_info "开始执行单次推文数据爬取..."
-    print_info "配置: 页数=${max_pages}（最多50页）, 每页=${page_size}条（实际由API决定）, 时间限制=10小时"
+    print_info "配置: 页数=${max_pages}（最多15页）, 每页=${page_size}条（实际由API决定）"
+    print_info "智能时间检测: 拉取过去${hours_limit}小时数据，自动优化停止时机"
     
     # 创建日志目录
     mkdir -p "$(dirname "$LOG_FILE")"
@@ -242,7 +249,8 @@ run_once() {
     print_info "正在爬取数据，请稍候..."
     "$SCRIPT_DIR/venv/bin/python" main.py --mode once \
         --max-pages $max_pages \
-        --page-size $page_size 2>&1 | tee -a "$LOG_FILE"
+        --page-size $page_size \
+        --hours-limit $hours_limit 2>&1 | tee -a "$LOG_FILE"
     
     local exit_code=${PIPESTATUS[0]}
     
@@ -288,23 +296,29 @@ show_help() {
     echo "  $0 [命令] [参数]"
     echo ""
     echo "命令:"
-    echo "  start [间隔] [页数] [每页条数]  启动服务 (默认: 60分钟, 50页, 100条)"
-    echo "  stop                        停止服务"
-    echo "  restart [间隔] [页数] [每页条数] 重启服务"
-    echo "  status                      查看服务状态"
-    echo "  once [页数] [每页条数]        执行单次爬取 (默认: 50页, 100条)"
-    echo "  logs [行数]                  查看日志 (默认50行)"
-    echo "  monitor                     查看监控状态和日志"
-    echo "  help                        显示帮助"
+    echo "  start [间隔] [页数] [每页条数] [小时限制]  启动服务 (默认: 60分钟, 50页, 100条, 3小时)"
+    echo "  stop                                   停止服务"
+    echo "  restart [间隔] [页数] [每页条数] [小时限制] 重启服务"
+    echo "  status                                 查看服务状态"
+    echo "  once [页数] [每页条数] [小时限制]         执行单次爬取 (默认: 50页, 100条, 3小时)"
+    echo "  logs [行数]                            查看日志 (默认50行)"
+    echo "  monitor                                查看监控状态和日志"
+    echo "  help                                   显示帮助"
     echo ""
     echo "示例:"
     echo "  $0 start                    # 使用默认配置启动"
     echo "  $0 start 10                 # 10分钟间隔启动"
-    echo "  $0 start 60 50 100          # 60分钟间隔，50页，每页100条"
+    echo "  $0 start 60 50 100 24       # 60分钟间隔，50页，每页100条，24小时时间限制"
     echo "  $0 once                     # 执行单次爬取"
-    echo "  $0 once 50 100              # 单次爬取50页，每页100条"
+    echo "  $0 once 50 100 12           # 单次爬取50页，每页100条，12小时时间限制"
     echo "  $0 logs 100                 # 查看最新100行日志"
     echo "  $0 monitor                  # 查看监控状态"
+    echo ""
+    echo "智能时间检测功能:"
+    echo "  • 跟踪每个项目/用户的独立时间线"
+    echo "  • 只有当所有项目都超过时间限制时才停止拉取"
+    echo "  • 避免因单个项目超时而导致其他项目数据丢失"
+    echo "  • 自动优化API请求次数，避免资源浪费"
     echo ""
     echo "防待机功能:"
     echo "  • macOS: 使用caffeinate防止系统休眠影响服务"
@@ -319,13 +333,13 @@ show_help() {
 # 主程序
 case "$1" in
     "start")
-        start_service "$2" "$3" "$4"
+        start_service "$2" "$3" "$4" "$5"
         ;;
     "stop")
         stop_service
         ;;
     "restart")
-        restart_service "$2" "$3" "$4"
+        restart_service "$2" "$3" "$4" "$5"
         ;;
     "status")
         check_status
@@ -336,7 +350,7 @@ case "$1" in
         fi
         ;;
     "once")
-        run_once "$2" "$3"
+        run_once "$2" "$3" "$4"
         ;;
     "logs")
         show_logs "$2"

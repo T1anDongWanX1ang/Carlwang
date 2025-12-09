@@ -32,6 +32,7 @@ def main():
     parser.add_argument('--max-pages', type=int, help='最大页数')
     parser.add_argument('--page-size', type=int, help='每页大小')
     parser.add_argument('--interval', type=int, help='调度间隔(分钟)')
+    parser.add_argument('--hours-limit', type=int, default=3, help='时间限制(小时)，只拉取过去N小时的推文，默认3小时')
     parser.add_argument('--config', type=str, help='配置文件路径')
     
     args = parser.parse_args()
@@ -104,11 +105,11 @@ def run_once(args):
     
     logger.info("开始单次数据爬取...")
     
-    # 执行爬取（直接使用配置文件中的list_ids进行并行获取，拉取过去10小时数据）
+    # 执行爬取（直接使用配置文件中的list_ids进行并行获取，使用智能时间检测）
     success = crawler.crawl_tweets(
         max_pages=args.max_pages,
         page_size=args.page_size,
-        hours_limit=10
+        hours_limit=args.hours_limit
     )
     
     # 显示爬取统计信息
@@ -143,11 +144,11 @@ def run_scheduled(args):
         """定时爬取任务（包含项目分析）"""
         logger.info("执行定时爬取任务...")
         
-        # 执行爬取（直接使用配置文件中的list_ids进行并行获取，拉取过去10小时数据）
+        # 执行爬取（直接使用配置文件中的list_ids进行并行获取，使用智能时间检测）
         crawl_success = crawler.crawl_tweets(
             max_pages=args.max_pages,
             page_size=args.page_size,
-            hours_limit=10
+            hours_limit=args.hours_limit
         )
         
         if crawl_success:
