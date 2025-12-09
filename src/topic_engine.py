@@ -256,8 +256,8 @@ class TopicEngine:
                     saved_count += 1
                     self.logger.info(f"话题保存成功: {topic.topic_name} (ID: {topic.topic_id})")
                     
-                    # 更新相关推文的topic_id
-                    self._update_related_tweets_topic_id(topic)
+                    # 注释掉：移除推文topic_id更新逻辑
+                    # self._update_related_tweets_topic_id(topic)
                 else:
                     self.logger.error(f"话题保存失败: {topic.topic_name}")
             
@@ -267,57 +267,6 @@ class TopicEngine:
             self.logger.error(f"保存话题到数据库失败: {e}")
             return 0
     
-    def _update_related_tweets_topic_id(self, topic: Topic):
-        """
-        更新与话题相关的推文的topic_id字段
-        
-        Args:
-            topic: 话题对象
-        """
-        try:
-            # 查找与话题相关的推文（基于话题名称关键词匹配）
-            related_tweets = self._find_related_tweets(topic.topic_name, hours=48)
-            
-            if not related_tweets:
-                self.logger.warning(f"未找到与话题 {topic.topic_name} 相关的推文")
-                return
-            
-            self.logger.info(f"找到 {len(related_tweets)} 条与话题 {topic.topic_name} 相关的推文，开始更新topic_id...")
-            
-            updated_count = 0
-            for tweet in related_tweets:
-                # 只更新那些没有topic_id或project_id的推文，避免覆盖已分类的推文
-                # 增强保护：如果推文已有 project_id，绝不覆盖
-                if not tweet.topic_id and not tweet.project_id:
-                    # 更新推文的topic_id，使用双重保护确保不覆盖project_id
-                    update_sql = f"""
-                    UPDATE {self.tweet_dao.table_name} 
-                    SET topic_id = %s, update_time = %s 
-                    WHERE id_str = %s 
-                      AND (topic_id IS NULL OR topic_id = '') 
-                      AND (project_id IS NULL OR project_id = '')
-                    """
-                    
-                    affected_rows = self.tweet_dao.db_manager.execute_update(
-                        update_sql, 
-                        (topic.topic_id, datetime.now(), tweet.id_str)
-                    )
-                    
-                    if affected_rows > 0:
-                        updated_count += 1
-                        self.logger.debug(f"推文 {tweet.id_str} 已关联到话题 {topic.topic_id}")
-                    else:
-                        self.logger.debug(f"推文 {tweet.id_str} 未更新（可能已有project_id或topic_id）")
-                else:
-                    if tweet.project_id:
-                        self.logger.debug(f"推文 {tweet.id_str} 已有project_id={tweet.project_id}，跳过话题关联")
-                    if tweet.topic_id:
-                        self.logger.debug(f"推文 {tweet.id_str} 已有topic_id={tweet.topic_id}，跳过话题关联")
-            
-            self.logger.info(f"成功将 {updated_count} 条推文关联到话题 {topic.topic_name}")
-            
-        except Exception as e:
-            self.logger.error(f"更新话题相关推文失败: {topic.topic_name}, 错误: {e}")
     
     def _find_related_tweets(self, topic_name: str, hours: int = 24) -> List[Tweet]:
         """

@@ -15,7 +15,7 @@ from src.crawler import crawler
 from src.utils.scheduler import scheduler
 from src.utils.logger import get_logger
 from src.utils.config_manager import config
-from src.topic_engine import topic_engine
+# from src.topic_engine import topic_engine  # 话题分析已移除，在独立服务中处理
 # from src.kol_engine import kol_engine  # KOL分析已禁用
 from src.project_engine import project_engine
 
@@ -200,41 +200,49 @@ def run_scheduled(args):
 
 
 def run_topic_analysis(args):
-    """运行话题分析"""
+    """运行话题分析 - 已移除，请使用独立的话题分析脚本"""
     logger = get_logger(__name__)
     
-    logger.info("开始话题分析模式...")
+    logger.warning("话题分析功能已从主服务中移除")
+    logger.info("请使用以下独立服务:")
+    logger.info("- ./start_topic_service.sh start  # 独立的话题分析服务")
+    logger.info("- python main.py --mode topic     # 仅在需要时手动运行")
     
-    # 分析现有推文数据
-    max_tweets = args.max_pages * (args.page_size or 10) if args.max_pages and args.page_size else 20
+    # 功能已移除
+    # logger.info("开始话题分析模式...")
+    # 
+    # # 分析现有推文数据
+    # max_tweets = args.max_pages * (args.page_size or 10) if args.max_pages and args.page_size else 20
+    # 
+    # success = topic_engine.analyze_recent_tweets(hours=24, max_tweets=max_tweets)
+    # 
+    # # 显示分析结果
+    # stats = topic_engine.get_topic_statistics()
+    # logger.info("=" * 30)
+    # logger.info("话题分析统计:")
+    # for key, value in stats.items():
+    #     if key != 'hot_topics_sample':  # 跳过复杂的嵌套数据
+    #         logger.info(f"{key}: {value}")
+    # 
+    # # 显示生成的话题
+    # from src.database.topic_dao import topic_dao
+    # topic_count = topic_dao.get_topic_count()
+    # if topic_count > 0:
+    #     hot_topics = topic_dao.get_hot_topics(limit=3)
+    #     logger.info("\n最新热门话题:")
+    #     for i, topic in enumerate(hot_topics, 1):
+    #         logger.info(f"{i}. {topic.topic_name} (热度: {topic.popularity})")
+    # 
+    # logger.info("=" * 30)
+    # 
+    # if success:
+    #     logger.info("话题分析完成")
+    #     sys.exit(0)
+    # else:
+    #     logger.error("话题分析失败")
+    #     sys.exit(1)
     
-    success = topic_engine.analyze_recent_tweets(hours=24, max_tweets=max_tweets)
-    
-    # 显示分析结果
-    stats = topic_engine.get_topic_statistics()
-    logger.info("=" * 30)
-    logger.info("话题分析统计:")
-    for key, value in stats.items():
-        if key != 'hot_topics_sample':  # 跳过复杂的嵌套数据
-            logger.info(f"{key}: {value}")
-    
-    # 显示生成的话题
-    from src.database.topic_dao import topic_dao
-    topic_count = topic_dao.get_topic_count()
-    if topic_count > 0:
-        hot_topics = topic_dao.get_hot_topics(limit=3)
-        logger.info("\n最新热门话题:")
-        for i, topic in enumerate(hot_topics, 1):
-            logger.info(f"{i}. {topic.topic_name} (热度: {topic.popularity})")
-    
-    logger.info("=" * 30)
-    
-    if success:
-        logger.info("话题分析完成")
-        sys.exit(0)
-    else:
-        logger.error("话题分析失败")
-        sys.exit(1)
+    sys.exit(0)
 
 
 # KOL分析功能已禁用

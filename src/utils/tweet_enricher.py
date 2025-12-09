@@ -121,12 +121,26 @@ class TweetEnricher:
                     if enriched_tweet:
                         enriched_tweets.append(enriched_tweet)
                     else:
-                        # 如果增强失败，使用原始推文
-                        enriched_tweets.append(tweet)
+                        # 如果增强失败，至少设置基础字段后再使用
+                        self.logger.warning(f"推文 {tweet.id_str} 增强失败，使用基础增强")
+                        fallback_tweet = self._apply_basic_enrichment(tweet, user_data_map)
+                        enriched_tweets.append(fallback_tweet)
                         
                 except Exception as e:
-                    self.logger.error(f"增强推文 {tweet.id_str} 失败: {e}")
-                    enriched_tweets.append(tweet)
+                    self.logger.error(f"增强推文 {tweet.id_str} 发生异常: {e}")
+                    self.logger.error(f"异常详情: {type(e).__name__}: {str(e)}")
+                    # 发生异常时，至少应用基础增强
+                    try:
+                        fallback_tweet = self._apply_basic_enrichment(tweet, user_data_map)
+                        enriched_tweets.append(fallback_tweet)
+                        self.logger.info(f"推文 {tweet.id_str} 应用基础增强成功")
+                    except Exception as fallback_error:
+                        self.logger.error(f"推文 {tweet.id_str} 基础增强也失败: {fallback_error}")
+                        # 最后兜底：使用原始推文但设置基本KOL信息
+                        if tweet.id_str in user_data_map:
+                            user_data = user_data_map[tweet.id_str]
+                            tweet.kol_id = user_data.get('id_str')
+                        enriched_tweets.append(tweet)
             
             self.logger.info(f"推文增强完成，处理 {len(enriched_tweets)} 条推文")
             return enriched_tweets
@@ -134,6 +148,43 @@ class TweetEnricher:
         except Exception as e:
             self.logger.error(f"批量增强推文失败: {e}")
             return tweets
+    
+    def _apply_basic_enrichment(self, tweet: Tweet, user_data_map: Dict[str, Dict[str, Any]]) -> Tweet:
+        """
+        应用基础增强，确保关键字段被设置
+        
+        Args:
+            tweet: 原始推文
+            user_data_map: 用户数据映射
+            
+        Returns:
+            应用基础增强的推文
+        """
+        try:
+            # 1. 设置基本的KOL ID
+            if tweet.id_str in user_data_map:
+                user_data = user_data_map[tweet.id_str]
+                kol_id = user_data.get('id_str')
+                tweet.kol_id = kol_id
+                
+                # 2. 检查是否是项目官方推文（这是关键字段）
+                is_project_kol = self._is_project_kol(kol_id)
+                tweet.is_real_project_tweet = 1 if is_project_kol else 0
+                
+                # 3. 设置基本有效性
+                tweet.is_valid = 1  # 默认有效
+                
+                # 4. 记录基础增强信息
+                tweet_url = f"https://x.com/{user_data.get('screen_name', 'unknown')}/status/{tweet.id_str}"
+                tweet.tweet_url = tweet_url
+                
+                self.logger.debug(f"推文 {tweet.id_str} 基础增强: kol_id={kol_id}, is_real_project_tweet={tweet.is_real_project_tweet}")
+                
+            return tweet
+            
+        except Exception as e:
+            self.logger.error(f"基础增强推文 {tweet.id_str} 失败: {e}")
+            return tweet
     
     def enrich_single_tweet(self, tweet: Tweet, 
                           user_data_map: Dict[str, Dict[str, Any]]) -> Optional[Tweet]:
@@ -148,17 +199,37 @@ class TweetEnricher:
             增强后的推文对象
         """
         try:
+            self.logger.debug(f"开始增强推文 {tweet.id_str}")
+            
             # 1. 设置 kol_id（从用户数据中获取 user.id_str）
-            kol_id = self._extract_kol_id_from_user_data(tweet, user_data_map)
-            tweet.kol_id = kol_id
+            try:
+                kol_id = self._extract_kol_id_from_user_data(tweet, user_data_map)
+                tweet.kol_id = kol_id
+                self.logger.debug(f"推文 {tweet.id_str} KOL ID设置: {kol_id}")
+            except Exception as e:
+                self.logger.error(f"推文 {tweet.id_str} 设置KOL ID失败: {e}")
+                raise
             
             # 2. 生成推文URL
-            tweet_url = self._generate_tweet_url(tweet)
-            tweet.tweet_url = tweet_url
+            try:
+                tweet_url = self._generate_tweet_url(tweet)
+                tweet.tweet_url = tweet_url
+                self.logger.debug(f"推文 {tweet.id_str} URL设置: {tweet_url}")
+            except Exception as e:
+                self.logger.error(f"推文 {tweet.id_str} 生成URL失败: {e}")
+                # URL生成失败不应该阻止后续处理
+                tweet.tweet_url = f"https://x.com/unknown/status/{tweet.id_str}"
             
             # 3. 内容质量检查：判断是否为有效的Crypto相关内容
-            is_valid = self._validate_crypto_content(tweet.full_text, use_ai=True)
-            tweet.is_valid = is_valid
+            try:
+                is_valid = self._validate_crypto_content(tweet.full_text, use_ai=True)
+                tweet.is_valid = is_valid
+                self.logger.debug(f"推文 {tweet.id_str} 内容有效性: {is_valid}")
+            except Exception as e:
+                self.logger.error(f"推文 {tweet.id_str} 内容验证失败: {e}")
+                # 内容验证失败时默认为有效
+                tweet.is_valid = 1
+                is_valid = 1
             
             # 4. 仅对有效推文进行进一步分析
             if is_valid:
@@ -195,16 +266,18 @@ class TweetEnricher:
                     token_tag = self._extract_token_symbols(tweet.full_text)
                     tweet.token_tag = token_tag
 
-                # 4.4 检查是否是项目官方推文
-                is_project_kol = self._is_project_kol(tweet.kol_id)
-                if is_project_kol:
-                    tweet.is_real_project_tweet = 1
-                    self.logger.debug(f"推文 {tweet.id_str} 的kol_id {tweet.kol_id} 是项目官方账号")
-                else:
+                # 4.4 检查是否是项目官方推文（关键字段，必须保证设置）
+                try:
+                    is_project_kol = self._is_project_kol(tweet.kol_id)
+                    tweet.is_real_project_tweet = 1 if is_project_kol else 0
+                    self.logger.debug(f"推文 {tweet.id_str} 项目官方推文检查: kol_id={tweet.kol_id}, is_project_kol={is_project_kol}")
+                except Exception as e:
+                    self.logger.error(f"推文 {tweet.id_str} 项目官方推文检查失败: {e}")
+                    # 检查失败时默认为非项目官方推文
                     tweet.is_real_project_tweet = 0
 
                 # 4.5 只对项目官方推文判断是否为重要公告
-                if is_project_kol:
+                if tweet.is_real_project_tweet == 1:
                     is_announce = self._classify_announcement(tweet.full_text)
                     tweet.is_announce = is_announce
 
@@ -229,16 +302,42 @@ class TweetEnricher:
                 tweet.token_tag = None  # 无效推文也不提取token
                 tweet.is_announce = 0  # 无效推文不是公告
                 
-                # 即使无效推文，也检查是否是项目官方推文
-                is_project_kol = self._is_project_kol(tweet.kol_id)
-                tweet.is_real_project_tweet = 1 if is_project_kol else 0
+                # 即使无效推文，也检查是否是项目官方推文（关键字段）
+                try:
+                    is_project_kol = self._is_project_kol(tweet.kol_id)
+                    tweet.is_real_project_tweet = 1 if is_project_kol else 0
+                    self.logger.debug(f"无效推文 {tweet.id_str} 项目官方推文检查: kol_id={tweet.kol_id}, is_project_kol={is_project_kol}")
+                except Exception as e:
+                    self.logger.error(f"无效推文 {tweet.id_str} 项目官方推文检查失败: {e}")
+                    tweet.is_real_project_tweet = 0
                 
-                self.logger.info(f"推文 {tweet.id_str} 标记为无效，kol_id={kol_id}, is_real_project_tweet={tweet.is_real_project_tweet}, url={tweet_url}")
+                self.logger.info(f"推文 {tweet.id_str} 标记为无效，kol_id={tweet.kol_id}, is_real_project_tweet={tweet.is_real_project_tweet}, url={tweet.tweet_url}")
             
             return tweet
             
         except Exception as e:
             self.logger.error(f"增强推文 {tweet.id_str} 失败: {e}")
+            self.logger.error(f"异常详情: {type(e).__name__}: {str(e)}")
+            import traceback
+            self.logger.error(f"异常堆栈: {traceback.format_exc()}")
+            
+            # 异常时至少确保关键字段被设置
+            try:
+                # 确保至少有基本的KOL信息
+                if not hasattr(tweet, 'kol_id') or tweet.kol_id is None:
+                    kol_id = self._extract_kol_id_from_user_data(tweet, user_data_map)
+                    tweet.kol_id = kol_id
+                
+                # 确保is_real_project_tweet字段被设置
+                if not hasattr(tweet, 'is_real_project_tweet'):
+                    is_project_kol = self._is_project_kol(tweet.kol_id)
+                    tweet.is_real_project_tweet = 1 if is_project_kol else 0
+                    
+                self.logger.info(f"推文 {tweet.id_str} 异常恢复成功，保留关键字段")
+                
+            except Exception as recovery_error:
+                self.logger.error(f"推文 {tweet.id_str} 异常恢复也失败: {recovery_error}")
+            
             return None
     
     def _validate_crypto_content(self, text: str, use_ai: bool = True) -> bool:

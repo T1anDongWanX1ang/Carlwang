@@ -17,7 +17,7 @@ from .utils.quotation_extractor import quotation_extractor
 # from .utils.user_language_integration import UserLanguageIntegration  # 语言检测已禁用
 from .models.tweet import Tweet
 from .models.user import TwitterUser
-from .topic_engine import topic_engine
+# from .topic_engine import topic_engine  # 话题分析已移除
 # from .kol_engine import kol_engine  # KOL分析已禁用
 from .project_engine import project_engine
 
@@ -33,7 +33,7 @@ class TwitterCrawler:
         self.user_dao = user_dao
         self.quotation_dao = quotation_dao
         self.data_mapper = data_mapper
-        self.topic_engine = topic_engine
+        # self.topic_engine = topic_engine  # 话题分析已移除
         # self.kol_engine = kol_engine  # KOL分析已禁用
         self.project_engine = project_engine
         self.tweet_enricher = tweet_enricher
@@ -138,22 +138,22 @@ class TwitterCrawler:
                 quotation_saved_count = self._save_quotations_to_database(valid_quotations)
                 self.logger.info(f"成功保存 {quotation_saved_count} 条引用关系数据")
             
-            # 4. 话题分析和生成（如果推文保存成功）
+            # 4. 数据保存完成
             if tweet_saved_count > 0:
                 self.logger.info(f"成功保存 {tweet_saved_count} 条推文到数据库")
                 
-                # 进行话题分析
-                try:
-                    self.logger.info("开始进行话题分析...")
-                    topic_success = self.topic_engine.analyze_recent_tweets(hours=1, max_tweets=50)
-                    
-                    if topic_success:
-                        self.logger.info("话题分析完成")
-                    else:
-                        self.logger.warning("话题分析失败，但不影响主流程")
-                        
-                except Exception as e:
-                    self.logger.error(f"话题分析异常: {e}")
+                # 话题分析已移除 - 在其他独立脚本中处理
+                # try:
+                #     self.logger.info("开始进行话题分析...")
+                #     topic_success = self.topic_engine.analyze_recent_tweets(hours=1, max_tweets=50)
+                #     
+                #     if topic_success:
+                #         self.logger.info("话题分析完成")
+                #     else:
+                #         self.logger.warning("话题分析失败，但不影响主流程")
+                #         
+                # except Exception as e:
+                #     self.logger.error(f"话题分析异常: {e}")
                 
                 # KOL分析已禁用
                 # try:
@@ -700,7 +700,7 @@ class TwitterCrawler:
             'database_tweet_count': self.tweet_dao.get_tweet_count(),
             'database_user_count': self.user_dao.get_user_count(),
             'database_quotation_count': self.quotation_dao.get_quotation_count(),
-            'topic_stats': self.topic_engine.get_topic_statistics(),
+            # 'topic_stats': self.topic_engine.get_topic_statistics(),  # 话题分析已移除
             # 'kol_stats': self.kol_engine.get_kol_statistics(),  # KOL分析已禁用
             'project_stats': self.project_engine.get_project_statistics()
         }
