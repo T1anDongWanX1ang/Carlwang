@@ -98,7 +98,7 @@ start_service() {
     
     print_info "启动推文数据爬取服务..."
     print_info "配置: 间隔=${interval}分钟, 页数=${max_pages}（最多15页）, 每页=${page_size}条（实际由API决定）"
-    print_info "智能时间检测: 拉取过去${hours_limit}小时数据，自动优化停止时机"
+    print_info "智能时间检测: 拉取过去${hours_limit}小时数据，支持UTC时间转换，自动优化停止时机"
     
     # 创建日志目录
     mkdir -p "$(dirname "$LOG_FILE")"
@@ -240,7 +240,7 @@ run_once() {
     
     print_info "开始执行单次推文数据爬取..."
     print_info "配置: 页数=${max_pages}（最多15页）, 每页=${page_size}条（实际由API决定）"
-    print_info "智能时间检测: 拉取过去${hours_limit}小时数据，自动优化停止时机"
+    print_info "智能时间检测: 拉取过去${hours_limit}小时数据，支持UTC时间转换，自动优化停止时机"
     
     # 创建日志目录
     mkdir -p "$(dirname "$LOG_FILE")"
@@ -318,6 +318,7 @@ show_help() {
     echo "  • 跟踪每个项目/用户的独立时间线"
     echo "  • 只有当所有项目都超过时间限制时才停止拉取"
     echo "  • 避免因单个项目超时而导致其他项目数据丢失"
+    echo "  • 自动UTC时间转换，确保时间窗口准确过滤"
     echo "  • 自动优化API请求次数，避免资源浪费"
     echo ""
     echo "防待机功能:"
