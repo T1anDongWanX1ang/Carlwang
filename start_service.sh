@@ -11,9 +11,9 @@ PID_FILE="$SCRIPT_DIR/${SERVICE_NAME}.pid"
 LOG_FILE="$SCRIPT_DIR/service.log"
 
 # 默认配置
-DEFAULT_INTERVAL=30
-DEFAULT_MAX_PAGES=15
-DEFAULT_PAGE_SIZE=20
+DEFAULT_INTERVAL=60
+DEFAULT_MAX_PAGES=50
+DEFAULT_PAGE_SIZE=100
 
 # 颜色输出
 RED='\033[0;31m'
@@ -95,7 +95,7 @@ start_service() {
     fi
     
     print_info "启动推文数据爬取服务..."
-    print_info "配置: 间隔=${interval}分钟, 页数=${max_pages}（最多15页）, 每页=${page_size}条（实际由API决定）, 时间限制=2小时"
+    print_info "配置: 间隔=${interval}分钟, 页数=${max_pages}（最多50页）, 每页=${page_size}条（实际由API决定）, 时间限制=3小时"
     
     # 创建日志目录
     mkdir -p "$(dirname "$LOG_FILE")"
@@ -233,7 +233,7 @@ run_once() {
     local page_size=${2:-$DEFAULT_PAGE_SIZE}
     
     print_info "开始执行单次推文数据爬取..."
-    print_info "配置: 页数=${max_pages}（最多15页）, 每页=${page_size}条（实际由API决定）, 时间限制=2小时"
+    print_info "配置: 页数=${max_pages}（最多50页）, 每页=${page_size}条（实际由API决定）, 时间限制=3小时"
     
     # 创建日志目录
     mkdir -p "$(dirname "$LOG_FILE")"
@@ -288,11 +288,11 @@ show_help() {
     echo "  $0 [命令] [参数]"
     echo ""
     echo "命令:"
-    echo "  start [间隔] [页数] [每页条数]  启动服务 (默认: 5分钟, 3页, 100条)"
+    echo "  start [间隔] [页数] [每页条数]  启动服务 (默认: 60分钟, 50页, 100条)"
     echo "  stop                        停止服务"
     echo "  restart [间隔] [页数] [每页条数] 重启服务"
     echo "  status                      查看服务状态"
-    echo "  once [页数] [每页条数]        执行单次爬取 (默认: 3页, 100条)"
+    echo "  once [页数] [每页条数]        执行单次爬取 (默认: 50页, 100条)"
     echo "  logs [行数]                  查看日志 (默认50行)"
     echo "  monitor                     查看监控状态和日志"
     echo "  help                        显示帮助"
@@ -300,9 +300,9 @@ show_help() {
     echo "示例:"
     echo "  $0 start                    # 使用默认配置启动"
     echo "  $0 start 10                 # 10分钟间隔启动"
-    echo "  $0 start 5 5 50             # 5分钟间隔，5页，每页50条"
+    echo "  $0 start 60 50 100          # 60分钟间隔，50页，每页100条"
     echo "  $0 once                     # 执行单次爬取"
-    echo "  $0 once 5 50                # 单次爬取5页，每页50条"
+    echo "  $0 once 50 100              # 单次爬取50页，每页100条"
     echo "  $0 logs 100                 # 查看最新100行日志"
     echo "  $0 monitor                  # 查看监控状态"
     echo ""

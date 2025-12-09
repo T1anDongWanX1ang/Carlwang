@@ -1,13 +1,13 @@
 #!/bin/bash
 
 # Topic Analysis Service Management Script
-# Executes topic analysis every 15 minutes (python main.py --mode topic)
+# Executes topic analysis every 60 minutes (python main.py --mode topic)
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PID_FILE="$SCRIPT_DIR/topic_service.pid"
 LOG_FILE="$SCRIPT_DIR/logs/topic_service.log"
 PYTHON_CMD="python3 main.py --mode topic"
-INTERVAL=900  # 15 minutes in seconds
+INTERVAL=3600  # 60 minutes in seconds
 
 # Ensure logs directory exists
 mkdir -p "$SCRIPT_DIR/logs"
@@ -27,7 +27,7 @@ start_service() {
         return 1
     fi
     
-    echo "Starting topic analysis service (every 15 minutes)..."
+    echo "Starting topic analysis service (every 60 minutes)..."
     
     # Create a separate script for the service loop
     cat > "$SCRIPT_DIR/topic_service_loop.sh" << 'EOF'
