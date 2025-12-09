@@ -220,9 +220,19 @@ class TweetEnricher:
                 # URL生成失败不应该阻止后续处理
                 tweet.tweet_url = f"https://x.com/unknown/status/{tweet.id_str}"
             
-            # 3. 内容质量检查：判断是否为有效的Crypto相关内容
+            # 3. 先检查是否为项目官方推文
+            is_project_kol = self._is_project_kol(tweet.kol_id)
+            tweet.is_real_project_tweet = 1 if is_project_kol else 0
+            
+            # 4. 内容质量检查：判断是否为有效的Crypto相关内容
+            # 项目官方推文无需严格的内容验证，直接标记为有效
             try:
-                is_valid = self._validate_crypto_content(tweet.full_text, use_ai=True)
+                if is_project_kol:
+                    is_valid = True
+                    self.logger.debug(f"推文 {tweet.id_str} 来自项目官方账号，跳过内容验证")
+                else:
+                    is_valid = self._validate_crypto_content(tweet.full_text, use_ai=True)
+                    
                 tweet.is_valid = is_valid
                 self.logger.debug(f"推文 {tweet.id_str} 内容有效性: {is_valid}")
             except Exception as e:
@@ -231,9 +241,9 @@ class TweetEnricher:
                 tweet.is_valid = 1
                 is_valid = 1
             
-            # 4. 仅对有效推文进行进一步分析
+            # 5. 仅对有效推文进行进一步分析
             if is_valid:
-                # 4.1 情绪分析
+                # 5.1 情绪分析
                 sentiment = self._analyze_tweet_sentiment(tweet.full_text, use_ai=True)
                 tweet.sentiment = sentiment
 
@@ -266,17 +276,7 @@ class TweetEnricher:
                     token_tag = self._extract_token_symbols(tweet.full_text)
                     tweet.token_tag = token_tag
 
-                # 4.4 检查是否是项目官方推文（关键字段，必须保证设置）
-                try:
-                    is_project_kol = self._is_project_kol(tweet.kol_id)
-                    tweet.is_real_project_tweet = 1 if is_project_kol else 0
-                    self.logger.debug(f"推文 {tweet.id_str} 项目官方推文检查: kol_id={tweet.kol_id}, is_project_kol={is_project_kol}")
-                except Exception as e:
-                    self.logger.error(f"推文 {tweet.id_str} 项目官方推文检查失败: {e}")
-                    # 检查失败时默认为非项目官方推文
-                    tweet.is_real_project_tweet = 0
-
-                # 4.5 只对项目官方推文判断是否为重要公告
+                # 4.4 只对项目官方推文判断是否为重要公告
                 if tweet.is_real_project_tweet == 1:
                     is_announce = self._classify_announcement(tweet.full_text)
                     tweet.is_announce = is_announce
@@ -302,14 +302,16 @@ class TweetEnricher:
                 tweet.token_tag = None  # 无效推文也不提取token
                 tweet.is_announce = 0  # 无效推文不是公告
                 
-                # 即使无效推文，也检查是否是项目官方推文（关键字段）
-                try:
-                    is_project_kol = self._is_project_kol(tweet.kol_id)
-                    tweet.is_real_project_tweet = 1 if is_project_kol else 0
-                    self.logger.debug(f"无效推文 {tweet.id_str} 项目官方推文检查: kol_id={tweet.kol_id}, is_project_kol={is_project_kol}")
-                except Exception as e:
-                    self.logger.error(f"无效推文 {tweet.id_str} 项目官方推文检查失败: {e}")
-                    tweet.is_real_project_tweet = 0
+                # 确认项目官方推文字段已设置（前面已经检查过了）
+                if not hasattr(tweet, 'is_real_project_tweet'):
+                    # 如果前面的检查失败了，重新检查
+                    try:
+                        is_project_kol = self._is_project_kol(tweet.kol_id)
+                        tweet.is_real_project_tweet = 1 if is_project_kol else 0
+                        self.logger.debug(f"补充检查无效推文 {tweet.id_str} 项目官方推文: kol_id={tweet.kol_id}, is_project_kol={is_project_kol}")
+                    except Exception as e:
+                        self.logger.error(f"补充检查无效推文 {tweet.id_str} 项目官方推文失败: {e}")
+                        tweet.is_real_project_tweet = 0
                 
                 self.logger.info(f"推文 {tweet.id_str} 标记为无效，kol_id={tweet.kol_id}, is_real_project_tweet={tweet.is_real_project_tweet}, url={tweet.tweet_url}")
             
