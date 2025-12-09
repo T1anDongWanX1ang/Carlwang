@@ -206,9 +206,9 @@ class TweetDAO:
                 full_text, created_at, created_at_datetime,
                 bookmark_count, favorite_count, quote_count, reply_count,
                 retweet_count, view_count, engagement_total, update_time,
-                kol_id, entity_id, project_id, topic_id, is_valid, sentiment, tweet_url, link_url, token_tag, project_tag, isAnnounce, summary
+                kol_id, entity_id, project_id, topic_id, is_valid, sentiment, tweet_url, link_url, token_tag, project_tag, isAnnounce, summary, is_real_project_tweet
             ) VALUES (
-                %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s
+                %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s
             )
             """
 
@@ -216,6 +216,11 @@ class TweetDAO:
             for tweet in valid_tweets:
                 try:
                     tweet_data = tweet.to_dict()
+                    
+                    # 调试日志：输出is_real_project_tweet字段值
+                    is_real_project_tweet_value = tweet_data.get('is_real_project_tweet', 0)
+                    self.logger.debug(f"推文 {tweet.id_str} is_real_project_tweet值: {is_real_project_tweet_value} (类型: {type(is_real_project_tweet_value)})")
+                    
                     params = (
                         tweet_data['id_str'],
                         tweet_data['conversation_id_str'],
@@ -242,7 +247,8 @@ class TweetDAO:
                         tweet_data.get('token_tag'),
                         tweet_data.get('project_tag'),
                         tweet_data.get('is_announce', 0),  # 默认为0
-                        tweet_data.get('summary')  # 公告总结
+                        tweet_data.get('summary'),  # 公告总结
+                        tweet_data.get('is_real_project_tweet', 0)  # 是否为项目官方推文
                     )
                     
                     affected_rows = self.db_manager.execute_update(sql, params)
