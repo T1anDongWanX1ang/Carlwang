@@ -233,12 +233,21 @@ class TwitterAPIClient:
                 self.logger.info(f"第 {page} 页没有数据，停止分页")
                 break
             
-            # 过滤推文：只保留过去hours_limit小时内的
+            # 过滤推文：只保留过去hours_limit小时内的，并跟踪每个项目的时间状态
             valid_tweets = []
             old_tweet_count = 0  # 记录超时推文数量
             
+            # 跟踪每个项目/账号的最新推文时间
+            project_latest_times = {}  # {user_id: latest_tweet_time}
+            project_has_valid_tweets = {}  # {user_id: bool} 本页是否有有效推文
+            
             for tweet in tweets:
                 try:
+                    # 提取用户信息
+                    user_info = tweet.get('user', {})
+                    user_id = user_info.get('id_str', 'unknown')
+                    user_name = user_info.get('name', 'Unknown')
+                    
                     # 尝试解析 created_at 字段
                     created_at_str = tweet.get('created_at', '')
                     if created_at_str:
@@ -248,17 +257,24 @@ class TwitterAPIClient:
                         if tweet_time.tzinfo:
                             tweet_time = tweet_time.replace(tzinfo=None)
                         
+                        # 更新该项目的最新推文时间
+                        if user_id not in project_latest_times or tweet_time > project_latest_times[user_id]:
+                            project_latest_times[user_id] = tweet_time
+                        
                         # 检查是否在时间范围内
                         if tweet_time >= time_cutoff:
                             valid_tweets.append(tweet)
+                            project_has_valid_tweets[user_id] = True
+                            self.logger.debug(f"保留推文: {user_name} ({user_id}) {tweet_time}")
                         else:
                             # 推文太旧，记录但继续处理其他推文
                             old_tweet_count += 1
                             filtered_tweets += 1
-                            self.logger.debug(f"推文时间 {tweet_time} 超过{hours_limit}小时限制，跳过")
+                            self.logger.debug(f"跳过超时推文: {user_name} ({user_id}) {tweet_time} < {time_cutoff}")
                     else:
                         # 如果没有 created_at 字段，保留该推文
                         valid_tweets.append(tweet)
+                        project_has_valid_tweets[user_id] = True
                         self.logger.warning(f"推文缺少 created_at 字段，已保留: {tweet.get('id_str', 'unknown')}")
                         
                 except Exception as e:
@@ -266,16 +282,17 @@ class TwitterAPIClient:
                     self.logger.warning(f"解析推文时间失败，已保留: {e}")
                     valid_tweets.append(tweet)
             
-            # 判断是否应该停止分页：
-            # 如果这一页中超时推文数量超过总数的80%，说明数据已经很旧了，可以停止
-            # 或者如果这一页没有任何有效推文，也可以停止
-            old_tweet_ratio = old_tweet_count / len(tweets) if tweets else 0
-            if old_tweet_ratio >= 0.8:
+            # 智能停止判断：检查是否所有项目都已经超时
+            should_stop_by_projects = self._should_stop_by_project_times(
+                project_latest_times, 
+                project_has_valid_tweets, 
+                time_cutoff, 
+                hours_limit
+            )
+            
+            # 如果基于项目时间分析应该停止，则设置停止标志
+            if should_stop_by_projects:
                 stopped_by_time = True
-                self.logger.info(f"本页超时推文比例过高 ({old_tweet_ratio:.1%})，停止拉取更多页面")
-            elif len(valid_tweets) == 0 and old_tweet_count > 0:
-                stopped_by_time = True
-                self.logger.info(f"本页无有效推文且存在超时推文，停止拉取更多页面")
             
             total_tweets += len(valid_tweets)
             self.logger.info(f"第 {page} 页获取到 {len(tweets)} 条推文，过滤后 {len(valid_tweets)} 条，累计 {total_tweets} 条有效推文")
@@ -362,6 +379,84 @@ class TwitterAPIClient:
         """关闭会话"""
         if self.session:
             self.session.close()
+    
+    def _should_stop_by_project_times(self, 
+                                     project_latest_times: Dict[str, datetime], 
+                                     project_has_valid_tweets: Dict[str, bool], 
+                                     time_cutoff: datetime, 
+                                     hours_limit: int) -> bool:
+        """
+        基于项目级别的时间分析判断是否应该停止拉取
+        
+        Args:
+            project_latest_times: 每个项目的最新推文时间 {user_id: latest_time}
+            project_has_valid_tweets: 每个项目本页是否有有效推文 {user_id: bool}
+            time_cutoff: 时间截止点
+            hours_limit: 时间限制（小时）
+            
+        Returns:
+            是否应该停止拉取
+        """
+        try:
+            if not project_latest_times:
+                self.logger.debug("没有项目时间数据，不基于项目时间停止")
+                return False
+            
+            # 计算有多少个项目的最新推文已经超时
+            total_projects = len(project_latest_times)
+            overdue_projects = 0
+            active_projects_with_valid_tweets = 0  # 有有效推文的活跃项目数
+            
+            project_analysis = []
+            
+            for user_id, latest_time in project_latest_times.items():
+                is_overdue = latest_time < time_cutoff
+                has_valid_tweets_this_page = project_has_valid_tweets.get(user_id, False)
+                
+                if is_overdue:
+                    overdue_projects += 1
+                    
+                if has_valid_tweets_this_page:
+                    active_projects_with_valid_tweets += 1
+                
+                project_analysis.append({
+                    'user_id': user_id,
+                    'latest_time': latest_time,
+                    'is_overdue': is_overdue,
+                    'has_valid_tweets': has_valid_tweets_this_page,
+                    'time_diff_hours': (datetime.now() - latest_time).total_seconds() / 3600
+                })
+            
+            # 记录详细的项目分析
+            self.logger.debug(f"项目时间分析: 总项目数={total_projects}, 超时项目数={overdue_projects}, 有效推文项目数={active_projects_with_valid_tweets}")
+            for analysis in project_analysis[:5]:  # 只显示前5个项目的详情
+                self.logger.debug(f"  项目 {analysis['user_id']}: 最新推文={analysis['latest_time']}, "
+                                f"超时={analysis['is_overdue']}, 有效推文={analysis['has_valid_tweets']}, "
+                                f"时间差={analysis['time_diff_hours']:.1f}小时")
+            
+            # 停止条件1: 如果所有项目的最新推文都已经超时，则停止
+            if overdue_projects == total_projects:
+                self.logger.info(f"所有 {total_projects} 个项目的最新推文都已超过 {hours_limit} 小时限制，停止拉取")
+                return True
+            
+            # 停止条件2: 如果本页没有任何项目产生有效推文，且大部分项目都已超时
+            if active_projects_with_valid_tweets == 0 and overdue_projects >= total_projects * 0.7:
+                self.logger.info(f"本页无任何项目产生有效推文，且 {overdue_projects}/{total_projects} 个项目已超时，停止拉取")
+                return True
+            
+            # 停止条件3: 如果超时项目比例很高（>=90%），且活跃项目很少
+            overdue_ratio = overdue_projects / total_projects
+            if overdue_ratio >= 0.9 and active_projects_with_valid_tweets <= 1:
+                self.logger.info(f"超时项目比例过高 ({overdue_ratio:.1%})，且活跃项目数量过少 ({active_projects_with_valid_tweets})，停止拉取")
+                return True
+            
+            self.logger.debug(f"继续拉取: 超时比例={overdue_ratio:.1%}, 活跃项目数={active_projects_with_valid_tweets}")
+            return False
+            
+        except Exception as e:
+            self.logger.error(f"项目时间分析失败: {e}")
+            # 发生异常时，保守地继续拉取
+            return False
 
 
 # 全局API客户端实例
