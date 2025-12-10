@@ -27,7 +27,7 @@ def main():
     
     # 命令行参数解析
     parser = argparse.ArgumentParser(description='Twitter数据爬虫')
-    parser.add_argument('--mode', choices=['once', 'schedule', 'test', 'topic', 'project'], default='once',
+    parser.add_argument('--mode', choices=['once', 'schedule', 'test', 'topic', 'project', 'project-once', 'project-schedule'], default='once',
                        help='运行模式: once=单次执行, schedule=定时调度, test=测试连接, topic=话题分析, project=项目分析')
     parser.add_argument('--max-pages', type=int, help='最大页数')
     parser.add_argument('--page-size', type=int, help='每页大小')
@@ -48,7 +48,7 @@ def main():
             config.reload_config()
             logger.info(f"使用配置文件: {args.config}")
         
-                         # 根据模式执行相应操作
+        # 根据模式执行相应操作
         if args.mode == 'test':
             run_tests()
         elif args.mode == 'once':
@@ -61,6 +61,10 @@ def main():
         #     run_kol_analysis(args)
         elif args.mode == 'project':
             run_project_analysis(args)
+        elif args.mode == 'project-once':
+            run_project_once(args)
+        elif args.mode == 'project-schedule':
+            run_project_scheduled(args)
         
     except KeyboardInterrupt:
         logger.info("接收到中断信号，正在退出...")
@@ -297,6 +301,101 @@ def run_project_analysis(args):
     else:
         logger.error("项目分析失败")
         sys.exit(1)
+
+
+def run_project_once(args):
+    """单次执行项目推文爬取"""
+    logger = get_logger(__name__)
+    
+    logger.info("开始单次项目推文数据爬取...")
+    
+    # 执行爬取（使用配置文件中的list_ids_project进行并行获取，使用智能时间检测）
+    success = crawler.crawl_project_tweets(
+        max_pages=args.max_pages,
+        page_size=args.page_size,
+        hours_limit=args.hours_limit
+    )
+    
+    # 显示爬取统计信息
+    stats = crawler.get_statistics()
+    logger.info("=" * 30)
+    logger.info("项目推文爬取统计:")
+    for key, value in stats.items():
+        logger.info(f"{key}: {value}")
+    logger.info("=" * 30)
+    
+    if success:
+        logger.info("项目推文数据爬取完成")
+        logger.info("单次执行完成")
+        sys.exit(0)
+    else:
+        logger.error("项目推文数据爬取失败")
+        sys.exit(1)
+
+
+def run_project_scheduled(args):
+    """定时调度执行项目推文爬取"""
+    logger = get_logger(__name__)
+    
+    logger.info("开始项目推文定时调度模式...")
+    
+    # 设置调度间隔
+    if args.interval:
+        scheduler.update_interval(args.interval)
+    
+    # 创建爬取任务函数
+    def crawl_project_task():
+        """定时项目推文爬取任务"""
+        logger.info("执行定时项目推文爬取任务...")
+        
+        # 执行爬取（使用配置文件中的list_ids_project进行并行获取，使用智能时间检测）
+        crawl_success = crawler.crawl_project_tweets(
+            max_pages=args.max_pages,
+            page_size=args.page_size,
+            hours_limit=args.hours_limit
+        )
+        
+        if crawl_success:
+            logger.info("项目推文爬取完成")
+        else:
+            logger.warning("项目推文爬取失败")
+        
+        return crawl_success
+    
+    # 设置调度器
+    scheduler.set_crawler(crawl_project_task)
+    
+    # 先执行一次测试
+    logger.info("执行连接测试...")
+    if not (crawler.test_connection() and crawler.test_api_connection()):
+        logger.error("连接测试失败，无法启动定时调度")
+        sys.exit(1)
+    
+    # 启动定时调度
+    scheduler.start_crawling()
+    
+    logger.info("项目推文定时调度已启动，按 Ctrl+C 停止")
+    
+    try:
+        # 主循环，定期显示状态
+        while True:
+            time.sleep(300)  # 每5分钟显示一次状态
+            
+            # 显示调度器状态
+            scheduler_status = scheduler.get_status()
+            logger.info(f"调度器状态: 运行中={scheduler_status['is_running']}, "
+                       f"任务数={scheduler_status['task_count']}, "
+                       f"成功率={scheduler_status['success_rate']:.1f}%")
+            
+            # 显示爬虫统计
+            crawler_stats = crawler.get_statistics()
+            logger.info(f"爬虫统计: 成功={crawler_stats['success_count']}, "
+                       f"失败={crawler_stats['error_count']}, "
+                       f"数据库推文数={crawler_stats['database_tweet_count']}")
+    
+    except KeyboardInterrupt:
+        logger.info("接收到停止信号...")
+        scheduler.stop()
 
 
 def cleanup():

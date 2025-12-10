@@ -149,7 +149,277 @@ class TweetEnricher:
             self.logger.error(f"批量增强推文失败: {e}")
             return tweets
     
-    def _apply_basic_enrichment(self, tweet: Tweet, user_data_map: Dict[str, Dict[str, Any]]) -> Tweet:
+    def enrich_project_tweets_simplified(self, tweets: List[Tweet], 
+                                       user_data_map: Dict[str, Dict[str, Any]]) -> List[Tweet]:
+        """
+        简化的项目推文增强处理（去除特定字段计算和复杂数据加载）
+        
+        去除字段：is_valid, entity_id, topic_id, project_id, narrative_id, is_real_project_tweet
+        去除逻辑：KOL缓存、项目匹配器、token提取器等重型组件
+        保留字段：kol_id（从user_data直接获取）, sentiment（基于关键词）, is_announce（映射为isAnnounce）
+        
+        Args:
+            tweets: 推文列表
+            user_data_map: 用户数据映射 {user_id: user_data}
+            
+        Returns:
+            简化增强后的推文列表
+        """
+        try:
+            enriched_tweets = []
+            
+            for tweet in tweets:
+                try:
+                    # 简化增强单条推文
+                    enriched_tweet = self._enrich_project_tweet_simplified(tweet, user_data_map)
+                    if enriched_tweet:
+                        enriched_tweets.append(enriched_tweet)
+                    else:
+                        # 如果增强失败，使用最基础的处理
+                        self.logger.warning(f"项目推文 {tweet.id_str} 增强失败，使用最基础处理")
+                        fallback_tweet = self._apply_minimal_enrichment(tweet, user_data_map)
+                        enriched_tweets.append(fallback_tweet)
+                        
+                except Exception as e:
+                    self.logger.error(f"增强项目推文 {tweet.id_str} 发生异常: {e}")
+                    # 发生异常时，使用最基础的处理
+                    try:
+                        fallback_tweet = self._apply_minimal_enrichment(tweet, user_data_map)
+                        enriched_tweets.append(fallback_tweet)
+                    except Exception as fallback_e:
+                        self.logger.error(f"项目推文基础处理也失败: {fallback_e}")
+                        # 最后的保险：设置基本字段后使用原推文
+                        tweet.kol_id = user_data_map.get(tweet.id_str, {}).get('id_str')
+                        tweet.sentiment = None
+                        tweet.isAnnounce = 0
+                        enriched_tweets.append(tweet)
+            
+            self.logger.info(f"项目推文简化增强完成: {len(enriched_tweets)}/{len(tweets)} 成功")
+            return enriched_tweets
+        
+        except Exception as e:
+            self.logger.error(f"增强项目推文列表失败: {e}")
+            return tweets
+    
+    def _enrich_project_tweet_simplified(self, tweet: Tweet, 
+                                       user_data_map: Dict[str, Dict[str, Any]]) -> Optional[Tweet]:
+        """
+        极简化增强单条项目推文 - 去掉所有复杂逻辑和AI处理
+        
+        Args:
+            tweet: 推文对象
+            user_data_map: 用户数据映射
+            
+        Returns:
+            增强后的推文对象
+        """
+        try:
+            self.logger.debug(f"开始极简化增强项目推文 {tweet.id_str}")
+            
+            # 1. 设置 kol_id（直接从user_data获取，不依赖缓存）
+            if tweet.id_str in user_data_map:
+                user_data = user_data_map[tweet.id_str]
+                tweet.kol_id = user_data.get('id_str')
+                
+                # 2. 生成推文URL（使用实际用户名）
+                screen_name = user_data.get('screen_name', 'unknown')
+                tweet.tweet_url = f"https://x.com/{screen_name}/status/{tweet.id_str}"
+            else:
+                tweet.kol_id = None
+                tweet.tweet_url = f"https://x.com/unknown/status/{tweet.id_str}"
+            
+            # 3. 设置基础情绪（简化版本，基于关键词）
+            tweet.sentiment = self._simple_sentiment_analysis(tweet.full_text)
+            
+            # 4. 基础公告检测（简化版本）
+            tweet.isAnnounce = self._simple_announcement_detection(tweet.full_text)
+            tweet.summary = None  # 不生成AI总结
+            
+            # 5. 基础活动检测（简化版本）
+            tweet.is_activity = self._simple_activity_detection(tweet.full_text)
+            tweet.activity_detail = None  # 不生成复杂活动详情
+            
+            # 6. 基础链接提取（简化版本）
+            tweet.link_url = self._simple_link_extraction(tweet.full_text)
+            
+            # 7. 其他字段设置为默认值
+            tweet.project_tag = None
+            tweet.token_tag = None
+            
+            self.logger.info(f"项目推文 {tweet.id_str} 极简化增强完成: kol_id={tweet.kol_id}, sentiment={tweet.sentiment}, isAnnounce={tweet.isAnnounce}, is_activity={tweet.is_activity}")
+            return tweet
+            
+        except Exception as e:
+            self.logger.error(f"极简化增强项目推文 {tweet.id_str} 失败: {e}")
+            return None
+    
+    def _simple_sentiment_analysis(self, text: str) -> Optional[str]:
+        """
+        简化的情绪分析 - 仅基于关键词，不使用AI
+        
+        Args:
+            text: 推文内容
+            
+        Returns:
+            情绪倾向：'Positive'/'Negative'/'Neutral'
+        """
+        try:
+            if not text:
+                return 'Neutral'
+                
+            text_lower = text.lower()
+            
+            # 积极关键词
+            positive_keywords = [
+                'bullish', 'moon', 'pump', 'surge', 'rally', 'breakout',
+                'gains', 'profit', 'good', 'great', 'amazing', 'awesome',
+                'up', 'rise', 'green', 'buy', 'hold', '涨', '好', '牛', '看好'
+            ]
+            
+            # 消极关键词
+            negative_keywords = [
+                'bearish', 'dump', 'crash', 'dip', 'decline', 'fall',
+                'bad', 'terrible', 'awful', 'down', 'red', 'sell',
+                '跌', '坏', '熊', '看空', '糟糕'
+            ]
+            
+            positive_score = sum(1 for keyword in positive_keywords if keyword in text_lower)
+            negative_score = sum(1 for keyword in negative_keywords if keyword in text_lower)
+            
+            if positive_score > negative_score:
+                return 'Positive'
+            elif negative_score > positive_score:
+                return 'Negative'
+            else:
+                return 'Neutral'
+                
+        except Exception as e:
+            self.logger.error(f"简化情绪分析失败: {e}")
+            return 'Neutral'
+    
+    def _simple_announcement_detection(self, text: str) -> int:
+        """
+        简化的公告检测 - 仅基于关键词，不使用AI
+        
+        Args:
+            text: 推文内容
+            
+        Returns:
+            1表示是公告，0表示不是
+        """
+        try:
+            if not text or len(text.strip()) < 20:
+                return 0
+                
+            text_lower = text.lower()
+            
+            # 公告关键词
+            announcement_keywords = [
+                'announce', 'announcement', 'update', 'news', 'release',
+                'launch', 'partnership', 'integration', 'upgrade',
+                '公告', '宣布', '发布', '更新', '启动', '合作'
+            ]
+            
+            return 1 if any(keyword in text_lower for keyword in announcement_keywords) else 0
+            
+        except Exception as e:
+            self.logger.error(f"简化公告检测失败: {e}")
+            return 0
+    
+    def _simple_activity_detection(self, text: str) -> int:
+        """
+        简化的活动检测 - 仅基于关键词，不使用AI
+        
+        Args:
+            text: 推文内容
+            
+        Returns:
+            1表示是活动，0表示不是
+        """
+        try:
+            if not text or len(text.strip()) < 20:
+                return 0
+                
+            text_lower = text.lower()
+            
+            # 活动关键词
+            activity_keywords = [
+                'airdrop', 'giveaway', 'campaign', 'contest', 'reward',
+                'prize', 'bounty', 'quest', 'distribution',
+                '空投', '活动', '奖励', '赠送', '竞赛'
+            ]
+            
+            return 1 if any(keyword in text_lower for keyword in activity_keywords) else 0
+            
+        except Exception as e:
+            self.logger.error(f"简化活动检测失败: {e}")
+            return 0
+    
+    def _simple_link_extraction(self, text: str) -> Optional[str]:
+        """
+        简化的链接提取 - 仅使用正则表达式
+        
+        Args:
+            text: 推文内容
+            
+        Returns:
+            提取的第一个链接，如果没有则返回None
+        """
+        try:
+            if not text:
+                return None
+                
+            import re
+            # 匹配HTTP/HTTPS链接
+            url_pattern = r'https?://[^\s]+'
+            urls = re.findall(url_pattern, text)
+            
+            return urls[0] if urls else None
+            
+        except Exception as e:
+            self.logger.error(f"简化链接提取失败: {e}")
+            return None
+    
+    def _apply_minimal_enrichment(self, tweet: Tweet, user_data_map: Dict[str, Dict[str, Any]]) -> Tweet:
+        """
+        应用最小化增强，仅设置必要字段
+        
+        Args:
+            tweet: 原始推文
+            user_data_map: 用户数据映射
+            
+        Returns:
+            最小化增强的推文
+        """
+        try:
+            # 1. 设置kol_id（直接从用户数据获取）
+            if tweet.id_str in user_data_map:
+                user_data = user_data_map[tweet.id_str]
+                tweet.kol_id = user_data.get('id_str')
+                
+                # 2. 生成推文URL
+                screen_name = user_data.get('screen_name', 'unknown')
+                tweet.tweet_url = f"https://x.com/{screen_name}/status/{tweet.id_str}"
+            else:
+                tweet.kol_id = None
+                tweet.tweet_url = f"https://x.com/unknown/status/{tweet.id_str}"
+            
+            # 3. 设置默认值
+            tweet.sentiment = None
+            tweet.isAnnounce = 0
+            tweet.summary = None
+            tweet.is_activity = 0
+            tweet.activity_detail = None
+            tweet.link_url = None
+            tweet.project_tag = None
+            tweet.token_tag = None
+            
+            self.logger.debug(f"推文 {tweet.id_str} 最小化增强: kol_id={tweet.kol_id}")
+            return tweet
+            
+        except Exception as e:
+            self.logger.error(f"最小化增强推文 {tweet.id_str} 失败: {e}")
+            return tweet
         """
         应用基础增强，确保关键字段被设置
         

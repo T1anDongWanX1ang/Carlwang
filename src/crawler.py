@@ -13,6 +13,7 @@ from .utils.data_mapper import data_mapper
 from .utils.config_manager import config
 from .utils.logger import get_logger
 from .utils.tweet_enricher import tweet_enricher
+from .utils.simple_tweet_enricher import simple_tweet_enricher
 from .utils.quotation_extractor import quotation_extractor
 # from .utils.user_language_integration import UserLanguageIntegration  # 语言检测已禁用
 from .models.tweet import Tweet
@@ -713,6 +714,97 @@ class TwitterCrawler:
         self.last_crawl_time = None
         self.api_client.reset_stats()
         self.logger.info("爬虫统计信息已重置")
+    
+    def crawl_project_tweets(self, max_pages: int = None, page_size: int = None, hours_limit: int = 2) -> bool:
+        """
+        爬取项目推文数据（简化流程版本）
+        
+        Args:
+            max_pages: 最大页数（不超过15页）
+            page_size: 每页大小
+            hours_limit: 时间限制（小时），只拉取过去N小时的推文，默认2小时
+            
+        Returns:
+            是否成功
+        """
+        self.crawl_count += 1
+        self.last_crawl_time = datetime.now()
+        
+        try:
+            self.logger.info(f"开始爬取项目推文数据 (第 {self.crawl_count} 次，时间限制: {hours_limit}小时)")
+            
+            # 1. 从API获取数据（使用配置中的list_ids_project）
+            list_ids_project = config.get('api.default_params.list_ids_project', [])
+            if not list_ids_project:
+                self.logger.error("配置文件中未找到list_ids_project")
+                self.error_count += 1
+                return False
+            
+            self.logger.info(f"使用项目列表IDs: {list_ids_project}")
+            
+            api_data_list = self._fetch_api_data(None, list_ids_project, max_pages, page_size, hours_limit)
+            
+            if not api_data_list:
+                self.logger.warning("未获取到任何项目推文API数据")
+                self.error_count += 1
+                return False
+            
+            self.logger.info(f"从API获取到 {len(api_data_list)} 条项目推文原始数据")
+            
+            # 2. 数据映射和转换（简化版本）
+            tweets = self._map_data_to_tweets(api_data_list)
+            
+            if not tweets:
+                self.logger.warning("项目推文数据映射后没有有效的数据")
+                self.error_count += 1
+                return False
+            
+            self.logger.info(f"成功映射 {len(tweets)} 条项目推文数据")
+            
+            # 2.1 提取用户数据
+            users = self._extract_users_from_api_data(api_data_list)
+            self.logger.info(f"成功提取 {len(users)} 条用户数据")
+            
+            # 2.2 构建用户数据映射（用于推文增强）
+            user_data_map = {}
+            for api_data in api_data_list:
+                try:
+                    tweet_id = api_data.get('id_str')
+                    user_data = api_data.get('user')
+                    if tweet_id and user_data and isinstance(user_data, dict):
+                        user_data_map[tweet_id] = user_data
+                except Exception as e:
+                    self.logger.warning(f"构建用户数据映射失败: {e}")
+                    continue
+            
+            # 2.3 项目推文极简化增强（使用专门的简化增强器，无复杂数据加载）
+            self.logger.info("开始项目推文极简化增强...")
+            enriched_tweets = simple_tweet_enricher.enrich_project_tweets_simple(tweets, user_data_map)
+            self.logger.info(f"项目推文极简化增强完成，处理了 {len(enriched_tweets)} 条推文")
+            
+            # 3. 简化存储到数据库（跳过复杂的处理逻辑）
+            # 先保存用户数据
+            if users:
+                user_saved_count = self._save_users_to_database(users)
+                self.logger.info(f"成功保存 {user_saved_count} 条用户数据")
+            
+            # 保存项目推文数据（使用普通推文的入库逻辑）
+            tweet_saved_count = self._save_tweets_to_database(enriched_tweets)
+            
+            # 4. 数据保存完成
+            if tweet_saved_count > 0:
+                self.logger.info(f"成功保存 {tweet_saved_count} 条项目推文到数据库")
+                self.success_count += 1
+                return True
+            else:
+                self.logger.error("保存项目推文到数据库失败")
+                self.error_count += 1
+                return False
+                
+        except Exception as e:
+            self.logger.error(f"爬取项目推文数据异常: {e}")
+            self.error_count += 1
+            return False
     
     def close(self) -> None:
         """关闭爬虫，清理资源"""

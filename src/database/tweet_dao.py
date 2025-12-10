@@ -217,10 +217,6 @@ class TweetDAO:
                 try:
                     tweet_data = tweet.to_dict()
                     
-                    # 调试日志：输出is_real_project_tweet字段值
-                    is_real_project_tweet_value = tweet_data.get('is_real_project_tweet', 0)
-                    self.logger.debug(f"推文 {tweet.id_str} is_real_project_tweet值: {is_real_project_tweet_value} (类型: {type(is_real_project_tweet_value)})")
-                    
                     params = (
                         tweet_data['id_str'],
                         tweet_data['conversation_id_str'],

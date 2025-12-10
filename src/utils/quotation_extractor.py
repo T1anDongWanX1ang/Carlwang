@@ -107,31 +107,37 @@ class QuotationExtractor:
             self.logger.error(f"解析引用关系数据异常: {e}")
             return None
     
-    def _parse_twitter_datetime(self, date_str: str) -> Optional[datetime]:
+    def _parse_twitter_datetime(self, date_str) -> Optional[datetime]:
         """
         解析Twitter API的日期时间格式
         
         Args:
-            date_str: Twitter API返回的日期时间字符串
+            date_str: Twitter API返回的日期时间字符串或datetime对象
             
         Returns:
             解析后的datetime对象
         """
+        from datetime import datetime
+        
         if not date_str:
             return None
         
         try:
+            # 如果已经是datetime对象，直接返回
+            if isinstance(date_str, datetime):
+                return date_str
+            
+            # 如果是字符串，进行解析
             # Twitter API日期格式: "Wed Oct 05 20:11:53 +0000 2016"
-            from datetime import datetime
             # 移除时区信息，简化解析
-            if '+0000' in date_str:
-                date_str = date_str.replace(' +0000', '')
+            if '+0000' in str(date_str):
+                date_str = str(date_str).replace(' +0000', '')
             
             # 解析格式
-            return datetime.strptime(date_str, '%a %b %d %H:%M:%S %Y')
+            return datetime.strptime(str(date_str), '%a %b %d %H:%M:%S %Y')
             
         except Exception as e:
-            self.logger.error(f"解析日期时间失败 '{date_str}': {e}")
+            self.logger.error(f"解析日期时间失败: {date_str}, 错误: {e}")
             # 返回当前时间作为fallback
             return datetime.now()
     
