@@ -788,8 +788,9 @@ class TwitterCrawler:
                 user_saved_count = self._save_users_to_database(users)
                 self.logger.info(f"成功保存 {user_saved_count} 条用户数据")
             
-            # 保存项目推文数据（使用普通推文的入库逻辑）
-            tweet_saved_count = self._save_tweets_to_database(enriched_tweets)
+            # 保存项目推文数据到指定的项目表
+            project_table_name = self.tweet_dao.db_manager.db_config.get('tables', {}).get('project_tweet', 'twitter_tweet_project_new')
+            tweet_saved_count = self.tweet_dao.batch_upsert_tweets(enriched_tweets, table_name=project_table_name)
             
             # 4. 数据保存完成
             if tweet_saved_count > 0:

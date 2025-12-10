@@ -71,7 +71,7 @@ class SimpleTweetEnricher:
                         # 最后的保险：设置基本字段后使用原推文
                         tweet.kol_id = user_data_map.get(tweet.id_str, {}).get('id_str')
                         tweet.sentiment = None
-                        tweet.isAnnounce = 0
+                        tweet.is_announce = 0
                         enriched_tweets.append(tweet)
             
             self.logger.info(f"项目推文简化增强完成: {len(enriched_tweets)}/{len(tweets)} 成功")
@@ -112,9 +112,9 @@ class SimpleTweetEnricher:
             tweet.sentiment = self._simple_sentiment_analysis(tweet.full_text)
             
             # 4. 简化公告检测
-            tweet.isAnnounce = self._simple_announcement_detection(tweet.full_text)
+            tweet.is_announce = self._simple_announcement_detection(tweet.full_text)
             # 如果是公告推文，生成AI总结
-            if tweet.isAnnounce == 1:
+            if tweet.is_announce == 1:
                 tweet.summary = self._generate_announcement_summary(tweet.full_text)
             else:
                 tweet.summary = None
@@ -134,7 +134,7 @@ class SimpleTweetEnricher:
             tweet.project_tag = None
             tweet.token_tag = None
             
-            self.logger.info(f"项目推文 {tweet.id_str} 简化增强完成: kol_id={tweet.kol_id}, sentiment={tweet.sentiment}, isAnnounce={tweet.isAnnounce}, is_activity={tweet.is_activity}")
+            self.logger.info(f"项目推文 {tweet.id_str} 简化增强完成: kol_id={tweet.kol_id}, sentiment={tweet.sentiment}, is_announce={tweet.is_announce}, is_activity={tweet.is_activity}")
             return tweet
             
         except Exception as e:
@@ -167,7 +167,7 @@ class SimpleTweetEnricher:
             
             # 3. 设置默认值
             tweet.sentiment = None
-            tweet.isAnnounce = 0
+            tweet.is_announce = 0
             tweet.summary = None
             tweet.is_activity = 0
             tweet.activity_detail = None

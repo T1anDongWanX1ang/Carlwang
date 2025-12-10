@@ -45,6 +45,10 @@ class Tweet:
     is_announce: Optional[int] = 0  # 是否为重要公告（0=否，1=是）
     summary: Optional[str] = None  # AI总结（针对公告推文的简洁总结）
     is_real_project_tweet: Optional[int] = 0  # 是否为项目官方推文（0=否，1=是，通过kol_id匹配twitter_kol_token_project表判断）
+    is_activity: Optional[int] = 0  # 是否为活动推文（0=否，1=是）
+    activity_detail: Optional[str] = None  # 活动详情（JSON格式）
+    is_retweet: Optional[int] = 0  # 是否为转推（0=否，1=是）
+    tweet_type: Optional[str] = "ORIGINAL"  # 推文类型（ORIGINAL/RETWEET/REPLY/QUOTE）
 
     def __post_init__(self):
         """初始化后处理"""
@@ -197,9 +201,13 @@ class Tweet:
             'link_url': getattr(self, 'link_url', None),  # 安全地获取link_url字段
             'token_tag': self.token_tag,
             'project_tag': self.project_tag,
-            'is_announce': self.is_announce,
+            'isAnnounce': self.is_announce,  # 映射到数据库字段名
             'summary': self.summary,
-            'is_real_project_tweet': getattr(self, 'is_real_project_tweet', 0)
+            'is_real_project_tweet': getattr(self, 'is_real_project_tweet', 0),
+            'is_activity': getattr(self, 'is_activity', 0),  # 添加活动检测字段
+            'activity_detail': getattr(self, 'activity_detail', None),  # 添加活动详情字段
+            'is_retweet': getattr(self, 'is_retweet', 0),  # 添加转推标记字段
+            'tweet_type': getattr(self, 'tweet_type', 'ORIGINAL')  # 添加推文类型字段
         }
     
     def validate(self) -> bool:

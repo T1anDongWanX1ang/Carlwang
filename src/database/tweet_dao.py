@@ -174,12 +174,13 @@ class TweetDAO:
             self.logger.error(f"推文upsert失败: {tweet.id_str}, 错误: {e}")
             return False
     
-    def batch_upsert_tweets(self, tweets: List[Tweet]) -> int:
+    def batch_upsert_tweets(self, tweets: List[Tweet], table_name: str = None) -> int:
         """
         批量插入或更新推文数据
         
         Args:
             tweets: 推文对象列表
+            table_name: 可选的表名，如果不指定则使用默认的self.table_name
             
         Returns:
             成功操作的数量
@@ -199,16 +200,37 @@ class TweetDAO:
             return 0
         
         try:
-            # 包含所有字段（包括新增的project_id、topic_id等）
+            # 确定使用的表名
+            target_table = table_name if table_name is not None else self.table_name
+            
+            # 根据表名动态决定字段列表
+            if target_table == 'twitter_tweet_project_new':
+                # 项目推文表字段（只包含实际存在的字段）
+                fields = [
+                    'id_str', 'conversation_id_str', 'in_reply_to_status_id_str',
+                    'full_text', 'created_at', 'created_at_datetime',
+                    'bookmark_count', 'favorite_count', 'quote_count', 'reply_count',
+                    'retweet_count', 'view_count', 'engagement_total', 'update_time',
+                    'sentiment', 'kol_id', 'tweet_url', 'link_url', 'isAnnounce', 'summary', 'is_activity', 'activity_detail', 'is_retweet'
+                ]
+            else:
+                # 常规推文表字段（包含所有字段）
+                fields = [
+                    'id_str', 'conversation_id_str', 'in_reply_to_status_id_str',
+                    'full_text', 'created_at', 'created_at_datetime',
+                    'bookmark_count', 'favorite_count', 'quote_count', 'reply_count',
+                    'retweet_count', 'view_count', 'engagement_total', 'update_time',
+                    'kol_id', 'entity_id', 'project_id', 'topic_id', 'is_valid', 'sentiment', 'tweet_url', 'link_url', 'token_tag', 'project_tag', 'isAnnounce', 'summary', 'is_real_project_tweet'
+                ]
+            
+            # 构建SQL语句
+            fields_str = ', '.join(fields)
+            placeholders = ', '.join(['%s'] * len(fields))
             sql = f"""
-            INSERT INTO {self.table_name} (
-                id_str, conversation_id_str, in_reply_to_status_id_str,
-                full_text, created_at, created_at_datetime,
-                bookmark_count, favorite_count, quote_count, reply_count,
-                retweet_count, view_count, engagement_total, update_time,
-                kol_id, entity_id, project_id, topic_id, is_valid, sentiment, tweet_url, link_url, token_tag, project_tag, isAnnounce, summary, is_real_project_tweet
+            INSERT INTO {target_table} (
+                {fields_str}
             ) VALUES (
-                %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s
+                {placeholders}
             )
             """
 
@@ -217,35 +239,41 @@ class TweetDAO:
                 try:
                     tweet_data = tweet.to_dict()
                     
-                    params = (
-                        tweet_data['id_str'],
-                        tweet_data['conversation_id_str'],
-                        tweet_data['in_reply_to_status_id_str'],
-                        tweet_data['full_text'],
-                        tweet_data['created_at'],
-                        tweet_data['created_at_datetime'],
-                        tweet_data['bookmark_count'],
-                        tweet_data['favorite_count'],
-                        tweet_data['quote_count'],
-                        tweet_data['reply_count'],
-                        tweet_data['retweet_count'],
-                        tweet_data['view_count'],
-                        tweet_data['engagement_total'],
-                        tweet_data['update_time'],
-                        tweet_data['kol_id'],
-                        tweet_data['entity_id'],
-                        tweet_data['project_id'],
-                        tweet_data['topic_id'],
-                        tweet_data['is_valid'],
-                        tweet_data['sentiment'],
-                        tweet_data['tweet_url'],
-                        tweet_data.get('link_url'),  # 使用get方法以防字段不存在
-                        tweet_data.get('token_tag'),
-                        tweet_data.get('project_tag'),
-                        tweet_data.get('is_announce', 0),  # 默认为0
-                        tweet_data.get('summary'),  # 公告总结
-                        tweet_data.get('is_real_project_tweet', 0)  # 是否为项目官方推文
-                    )
+                    # 根据字段列表动态提取参数
+                    if target_table == 'twitter_tweet_project_new':
+                        # 项目推文表：只提取存在的字段
+                        params = tuple(tweet_data.get(field) for field in fields)
+                    else:
+                        # 常规推文表：使用原有逻辑保持兼容性
+                        params = (
+                            tweet_data['id_str'],
+                            tweet_data['conversation_id_str'],
+                            tweet_data['in_reply_to_status_id_str'],
+                            tweet_data['full_text'],
+                            tweet_data['created_at'],
+                            tweet_data['created_at_datetime'],
+                            tweet_data['bookmark_count'],
+                            tweet_data['favorite_count'],
+                            tweet_data['quote_count'],
+                            tweet_data['reply_count'],
+                            tweet_data['retweet_count'],
+                            tweet_data['view_count'],
+                            tweet_data['engagement_total'],
+                            tweet_data['update_time'],
+                            tweet_data['kol_id'],
+                            tweet_data['entity_id'],
+                            tweet_data['project_id'],
+                            tweet_data['topic_id'],
+                            tweet_data['is_valid'],
+                            tweet_data['sentiment'],
+                            tweet_data['tweet_url'],
+                            tweet_data.get('link_url'),
+                            tweet_data.get('token_tag'),
+                            tweet_data.get('project_tag'),
+                            tweet_data.get('isAnnounce', 0),
+                            tweet_data.get('summary'),
+                            tweet_data.get('is_real_project_tweet', 0)
+                        )
                     
                     affected_rows = self.db_manager.execute_update(sql, params)
                     if affected_rows > 0:
