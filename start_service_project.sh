@@ -12,7 +12,7 @@ LOG_FILE="$SCRIPT_DIR/service_project.log"
 
 # 默认配置
 DEFAULT_INTERVAL=60
-DEFAULT_MAX_PAGES=50
+DEFAULT_MAX_PAGES=100
 DEFAULT_PAGE_SIZE=100
 DEFAULT_HOURS_LIMIT=3  # 智能时间检测：默认拉取过去3小时数据
 
@@ -97,7 +97,7 @@ start_service() {
     fi
     
     print_info "启动项目推文数据爬取服务..."
-    print_info "配置: 间隔=${interval}分钟, 页数=${max_pages}（最多15页）, 每页=${page_size}条（实际由API决定）"
+    print_info "配置: 间隔=${interval}分钟, 页数=${max_pages}（最多100页）, 每页=${page_size}条（实际由API决定）"
     print_info "智能时间检测: 拉取过去${hours_limit}小时数据，支持UTC时间转换，自动优化停止时机"
     print_info "数据表: twitter_tweet_project_new"
     print_info "数据源: config.json中的list_ids_project列表"
@@ -241,7 +241,7 @@ run_once() {
     local hours_limit=${3:-$DEFAULT_HOURS_LIMIT}
     
     print_info "开始执行单次项目推文数据爬取..."
-    print_info "配置: 页数=${max_pages}（最多15页）, 每页=${page_size}条（实际由API决定）"
+    print_info "配置: 页数=${max_pages}（最多100页）, 每页=${page_size}条（实际由API决定）"
     print_info "智能时间检测: 拉取过去${hours_limit}小时数据，支持UTC时间转换，自动优化停止时机"
     print_info "数据表: twitter_tweet_project_new"
     print_info "数据源: config.json中的list_ids_project列表"

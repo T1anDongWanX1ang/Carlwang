@@ -63,7 +63,7 @@ class TwitterCrawler:
         Args:
             list_id: 单个列表ID，如果不指定则使用配置中的默认值（向后兼容）
             list_ids: 多个列表ID列表，优先级高于list_id
-            max_pages: 最大页数（不超过15页）
+            max_pages: 最大页数（从配置读取，默认100页）
             page_size: 每页大小
             hours_limit: 时间限制（小时），只拉取过去N小时的推文，默认2小时（生产环境使用UTC时间）
             
@@ -215,7 +215,7 @@ class TwitterCrawler:
         Args:
             list_id: 单个列表ID（向后兼容）
             list_ids: 多个列表ID列表，优先级高于list_id
-            max_pages: 最大页数（不超过15页）
+            max_pages: 最大页数（从配置读取，默认100页）
             page_size: 每页大小
             hours_limit: 时间限制（小时），只拉取过去N小时的推文
             
@@ -720,7 +720,7 @@ class TwitterCrawler:
         爬取项目推文数据（简化流程版本）
         
         Args:
-            max_pages: 最大页数（不超过15页）
+            max_pages: 最大页数（从配置读取，默认100页）
             page_size: 每页大小
             hours_limit: 时间限制（小时），只拉取过去N小时的推文，默认2小时
             
