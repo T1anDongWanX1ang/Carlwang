@@ -204,15 +204,26 @@ class TweetDAO:
             target_table = table_name if table_name is not None else self.table_name
             
             # 根据表名动态决定字段列表
-            if target_table == 'twitter_tweet_project_new':
-                # 项目推文表字段（只包含实际存在的字段）
-                fields = [
-                    'id_str', 'conversation_id_str', 'in_reply_to_status_id_str',
-                    'full_text', 'created_at', 'created_at_datetime',
-                    'bookmark_count', 'favorite_count', 'quote_count', 'reply_count',
-                    'retweet_count', 'view_count', 'engagement_total', 'update_time',
-                    'sentiment', 'kol_id', 'tweet_url', 'link_url', 'isAnnounce', 'summary', 'is_activity', 'activity_detail', 'is_retweet'
-                ]
+            if target_table in ['twitter_tweet_project_new', 'twitter_tweet_back_test_cmc300']:
+                # 项目推文表字段（根据实际表结构调整，排除缺失字段）
+                if target_table == 'twitter_tweet_back_test_cmc300':
+                    # twitter_tweet_back_test_cmc300 表的实际字段（只保留确实存在的核心字段）
+                    fields = [
+                        'id_str', 'full_text', 'created_at_datetime',
+                        'bookmark_count', 'favorite_count', 'quote_count', 'reply_count',
+                        'retweet_count', 'view_count', 'engagement_total', 'update_time',
+                        'sentiment', 'user_id', 'tweet_url', 'link_url', 'isAnnounce', 'summary', 
+                        'is_activity', 'activity_detail', 'is_retweet', 'user_name'
+                    ]
+                else:
+                    # twitter_tweet_project_new 表的字段（保持原有配置）
+                    fields = [
+                        'id_str', 'conversation_id_str', 'in_reply_to_status_id_str',
+                        'full_text', 'created_at', 'created_at_datetime',
+                        'bookmark_count', 'favorite_count', 'quote_count', 'reply_count',
+                        'retweet_count', 'view_count', 'engagement_total', 'update_time',
+                        'sentiment', 'user_id', 'tweet_url', 'link_url', 'isAnnounce', 'summary', 'is_activity', 'activity_detail', 'is_retweet', 'user_name'
+                    ]
             else:
                 # 常规推文表字段（包含所有字段）
                 fields = [
@@ -240,7 +251,7 @@ class TweetDAO:
                     tweet_data = tweet.to_dict()
                     
                     # 根据字段列表动态提取参数
-                    if target_table == 'twitter_tweet_project_new':
+                    if target_table in ['twitter_tweet_project_new', 'twitter_tweet_back_test_cmc300']:
                         # 项目推文表：只提取存在的字段
                         params = tuple(tweet_data.get(field) for field in fields)
                     else:

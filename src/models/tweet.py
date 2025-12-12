@@ -32,7 +32,9 @@ class Tweet:
     update_time: Optional[datetime] = field(default_factory=datetime.now)
     
     # 新增字段
-    kol_id: Optional[str] = None  # KOL用户ID
+    kol_id: Optional[str] = None  # KOL用户ID (已改为user_id，保留此字段作为兼容性)
+    user_id: Optional[str] = None  # 用户ID
+    user_name: Optional[str] = None  # 用户名 (screen_name)
     entity_id: Optional[str] = None  # 实体ID（如话题ID）- 保留兼容性
     project_id: Optional[str] = None  # 项目ID（project_xxx格式）
     topic_id: Optional[str] = None  # 话题ID（topic_xxx格式）
@@ -133,6 +135,29 @@ class Tweet:
         if link_url:
             mapped_data['link_url'] = link_url
         
+        # 检测是否为转发推文
+        retweeted_status = api_data.get('retweeted_status')
+        if retweeted_status is not None:
+            mapped_data['is_retweet'] = 1
+            mapped_data['tweet_type'] = 'RETWEET'
+        else:
+            mapped_data['is_retweet'] = 0
+            mapped_data['tweet_type'] = 'ORIGINAL'
+        
+        # 提取用户信息 user.screen_name -> user_name
+        user_info = api_data.get('user', {})
+        if isinstance(user_info, dict):
+            user_screen_name = user_info.get('screen_name')
+            if user_screen_name:
+                mapped_data['user_name'] = user_screen_name
+            
+            # 提取用户ID (映射kol_id到user_id)
+            user_id = user_info.get('id_str') or user_info.get('id')
+            if user_id:
+                mapped_data['user_id'] = str(user_id)
+                # 为了向后兼容性，同时设置kol_id
+                mapped_data['kol_id'] = str(user_id)
+        
         # 创建Tweet对象
         return cls(**mapped_data)
     
@@ -191,7 +216,9 @@ class Tweet:
             'view_count': self.view_count,
             'engagement_total': self.engagement_total,
             'update_time': self.update_time or datetime.now(),
-            'kol_id': self.kol_id,
+            'kol_id': self.kol_id,  # 保留向后兼容性
+            'user_id': self.user_id or self.kol_id,  # 优先使用user_id，如果为空则使用kol_id
+            'user_name': self.user_name,
             'entity_id': self.entity_id,
             'project_id': self.project_id,
             'topic_id': self.topic_id,
