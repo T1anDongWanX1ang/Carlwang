@@ -224,6 +224,14 @@ class TwitterAPIClient:
         project_latest_times = {}  # {user_id: latest_tweet_time} - 跨页累积
         project_ever_had_valid_tweets = {}  # {user_id: bool} - 跨页累积，记录是否曾经有过有效推文
         
+        # 早期停止检测：连续空页面计数
+        consecutive_empty_pages = 0  # 连续没有有效推文的页面数
+        max_consecutive_empty_pages = 5  # 最多允许5页连续空页面
+        
+        # 早期停止检测：总体效率跟踪
+        total_valid_tweets_last_n_pages = 0  # 最近N页的有效推文总数
+        pages_for_efficiency_check = 10  # 检查最近10页的效率
+        
         while page <= max_pages:
             self.logger.info(f"获取第 {page} 页数据（最多{max_pages}页保护）" + (f", cursor={cursor[:20]}..." if cursor else ", 首页"))
             
@@ -313,6 +321,38 @@ class TwitterAPIClient:
             
             total_tweets += len(valid_tweets)
             self.logger.info(f"第 {page} 页获取到 {len(tweets)} 条推文，过滤后 {len(valid_tweets)} 条，累计 {total_tweets} 条有效推文")
+            
+            # 早期停止检测1: 连续空页面检测
+            if len(valid_tweets) == 0:
+                consecutive_empty_pages += 1
+                self.logger.debug(f"连续空页面计数: {consecutive_empty_pages}/{max_consecutive_empty_pages}")
+                if consecutive_empty_pages >= max_consecutive_empty_pages:
+                    self.logger.info(f"连续 {consecutive_empty_pages} 页无有效推文，停止拉取以节省资源")
+                    stopped_by_time = True
+            else:
+                consecutive_empty_pages = 0  # 重置连续空页面计数
+            
+            # 早期停止检测2: 效率检测（在一定页数后开始检测）
+            if page >= pages_for_efficiency_check:
+                # 计算最近N页的有效推文密度
+                total_valid_tweets_last_n_pages += len(valid_tweets)
+                if page > pages_for_efficiency_check:
+                    # 滑动窗口：减去N页前的数据（这里简化处理）
+                    avg_valid_per_page = total_valid_tweets_last_n_pages / pages_for_efficiency_check
+                    if avg_valid_per_page < 1.0:  # 平均每页不到1条有效推文
+                        self.logger.info(f"最近 {pages_for_efficiency_check} 页平均有效推文密度过低 ({avg_valid_per_page:.2f}/页)，停止拉取")
+                        stopped_by_time = True
+                    # 重置计数器（简化的滑动窗口）
+                    total_valid_tweets_last_n_pages = len(valid_tweets)
+            else:
+                total_valid_tweets_last_n_pages += len(valid_tweets)
+            
+            # 早期停止检测3: 大页数保护（40页以上时更严格）
+            if page >= 40:
+                active_projects_count = len([uid for uid, has_valid in project_has_valid_tweets_this_page.items() if has_valid])
+                if active_projects_count == 0:
+                    self.logger.info(f"已拉取 {page} 页，本页无任何活跃项目，停止拉取")
+                    stopped_by_time = True
             
             if valid_tweets:
                 yield valid_tweets
@@ -481,34 +521,29 @@ class TwitterAPIClient:
                 self.logger.info(f"所有 {total_projects} 个项目的最新推文都已超过 {hours_limit} 小时限制，停止拉取")
                 return True
             
-            # 停止条件2: 如果本页没有任何项目产生有效推文，且大部分项目都已超时
-            # 改进：同时检查是否曾经有过有效推文的项目也都超时了
-            if active_projects_with_valid_tweets == 0 and overdue_projects >= total_projects * 0.7:
-                # 如果曾经有过有效推文的项目也都超时了，才停止
-                overdue_with_valid_history = sum(
-                    1 for user_id, latest_time in project_latest_times.items()
-                    if latest_time < time_cutoff and project_ever_had_valid_tweets.get(user_id, False)
-                )
-                if overdue_with_valid_history == projects_ever_had_valid:
-                    self.logger.info(f"本页无任何项目产生有效推文，且所有曾经有有效推文的项目({overdue_with_valid_history}/{projects_ever_had_valid})都已超时，停止拉取")
-                    return True
+            # 停止条件2: 如果本页没有任何项目产生有效推文，且大部分项目都已超时（降低阈值）
+            # 改进：更积极的停止条件，避免资源浪费
+            if active_projects_with_valid_tweets == 0 and overdue_projects >= total_projects * 0.6:  # 从0.7降低到0.6
+                self.logger.info(f"本页无任何项目产生有效推文，且 {overdue_projects}/{total_projects} ({overdue_projects/total_projects:.1%}) 项目已超时，停止拉取")
+                return True
             
-            # 停止条件3: 如果超时项目比例很高（>=90%），且活跃项目很少
+            # 停止条件3: 如果超时项目比例很高（>=80%），且活跃项目很少（更积极）
             overdue_ratio = overdue_projects / total_projects
-            if overdue_ratio >= 0.9 and active_projects_with_valid_tweets <= 1:
-                # 额外检查：如果曾经有过有效推文的项目也都超时了，才停止
-                if projects_ever_had_valid > 0:
-                    overdue_with_valid_history = sum(
-                        1 for user_id, latest_time in project_latest_times.items()
-                        if latest_time < time_cutoff and project_ever_had_valid_tweets.get(user_id, False)
-                    )
-                    if overdue_with_valid_history < projects_ever_had_valid:
-                        # 还有曾经有有效推文的项目未超时，继续拉取
-                        self.logger.debug(f"继续拉取: 还有 {projects_ever_had_valid - overdue_with_valid_history} 个曾经有有效推文的项目未超时")
-                        return False
-                
+            if overdue_ratio >= 0.8 and active_projects_with_valid_tweets <= 2:  # 从0.9降低到0.8，活跃项目从1增加到2
                 self.logger.info(f"超时项目比例过高 ({overdue_ratio:.1%})，且活跃项目数量过少 ({active_projects_with_valid_tweets})，停止拉取")
                 return True
+            
+            # 停止条件4: 新增连续无效页面保护（基于项目维度）
+            # 如果所有曾经有有效推文的项目都已经超时很久，也停止
+            if projects_ever_had_valid > 0:
+                very_overdue_projects = sum(
+                    1 for user_id, latest_time in project_latest_times.items()
+                    if latest_time < time_cutoff - timedelta(hours=hours_limit * 2)  # 超时时间的2倍
+                    and project_ever_had_valid_tweets.get(user_id, False)
+                )
+                if very_overdue_projects >= projects_ever_had_valid * 0.8:  # 80%的有效项目都超时很久
+                    self.logger.info(f"大部分有效项目 ({very_overdue_projects}/{projects_ever_had_valid}) 都已超时很久，停止拉取")
+                    return True
             
             self.logger.debug(f"继续拉取: 超时比例={overdue_ratio:.1%}, 活跃项目数={active_projects_with_valid_tweets}, "
                             f"曾经有有效推文项目数={projects_ever_had_valid}")

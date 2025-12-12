@@ -99,7 +99,7 @@ start_service() {
     print_info "启动项目推文数据爬取服务..."
     print_info "配置: 间隔=${interval}分钟, 页数=${max_pages}（最多100页）, 每页=${page_size}条（实际由API决定）"
     print_info "智能时间检测: 拉取过去${hours_limit}小时数据，支持UTC时间转换，自动优化停止时机"
-    print_info "数据表: twitter_tweet_project_new"
+    print_info "数据表: twitter_tweet_back_test_cmc300"
     print_info "数据源: config.json中的list_ids_project列表"
     
     # 创建日志目录
@@ -243,7 +243,7 @@ run_once() {
     print_info "开始执行单次项目推文数据爬取..."
     print_info "配置: 页数=${max_pages}（最多100页）, 每页=${page_size}条（实际由API决定）"
     print_info "智能时间检测: 拉取过去${hours_limit}小时数据，支持UTC时间转换，自动优化停止时机"
-    print_info "数据表: twitter_tweet_project_new"
+    print_info "数据表: twitter_tweet_back_test_cmc300"
     print_info "数据源: config.json中的list_ids_project列表"
     
     # 创建日志目录
@@ -320,7 +320,7 @@ show_help() {
     echo ""
     echo "项目推文特色功能:"
     echo "  • 读取config.json中的list_ids_project列表"
-    echo "  • 数据存储到twitter_tweet_project_new表"
+    echo "  • 数据存储到twitter_tweet_back_test_cmc300表"
     echo "  • 简化的数据处理流程："
     echo "    - 跳过is_valid计算验证"
     echo "    - 跳过entity_id字段映射和计算"
