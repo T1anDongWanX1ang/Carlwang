@@ -1,0 +1,191 @@
+{
+  "name": "Twitter List Fetch (15m) with Ping",
+  "nodes": [
+    {
+      "parameters": {
+        "triggerTimes": {
+          "item": [
+            {
+              "mode": "Every X",
+              "minutes": 15
+            }
+          ]
+        }
+      },
+      "id": "1",
+      "name": "Cron 15m",
+      "type": "n8n-nodes-base.cron",
+      "typeVersion": 1,
+      "position": [ 200, 300 ]
+    },
+    {
+      "parameters": {
+        "values": {
+          "string": [
+            { "name": "apiKey", "value": "new1_038536908c7f4960812ee7d601f620a1" },
+            { "name": "listIds", "value": "[\"1996848536520897010\",\"1996863048959820198\",\"1996887049027440697\"]" }
+          ],
+          "number": [
+            { "name": "maxResults", "value": 100 },
+            { "name": "lookbackMinutes", "value": 20 }
+          ]
+        },
+        "options": {}
+      },
+      "id": "2",
+      "name": "Set Main Params",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 2,
+      "position": [ 420, 300 ]
+    },
+    {
+      "parameters": {
+        "functionCode": "// 将 listIds 数组展开为多条 item\nconst ids = $json.listIds || [];\nreturn ids.map(id => ({ json: { ...$json, listId: id } }));"
+      },
+      "id": "10",
+      "name": "Expand List IDs",
+      "type": "n8n-nodes-base.function",
+      "typeVersion": 2,
+      "position": [ 640, 300 ]
+    },
+    {
+      "parameters": {
+        "url": "https://api.twitterapi.io/2/lists/{{$json.listId}}/tweets",
+        "options": {
+          "queryParametersUi": {
+            "parameter": [
+              { "name": "max_results", "value": "={{$json.maxResults}}" }
+            ]
+          },
+          "headers": [
+            { "name": "X-API-Key", "value": "={{$json.apiKey}}" },
+            { "name": "Accept", "value": "application/json" }
+          ]
+        }
+      },
+      "id": "3",
+      "name": "HTTP Fetch List Tweets",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 2,
+      "position": [ 860, 300 ]
+    },
+    {
+      "parameters": {
+        "functionCode": "// 保留最近 lookbackMinutes 的推文\\nconst lookbackMs = ($json.lookbackMinutes || 20) * 60 * 1000;\\nconst cutoff = Date.now() - lookbackMs;\\n\\nif (!$json.data || !Array.isArray($json.data)) {\\n  return [];\\n}\\n\\nreturn $json.data\\n  .filter(t => {\\n    const ts = Date.parse(t.created_at || \"\");\\n    return isNaN(ts) ? true : ts >= cutoff;\\n  })\\n  .map(t => ({ json: t }));"
+      },
+      "id": "4",
+      "name": "Filter Recent 20m",
+      "type": "n8n-nodes-base.function",
+      "typeVersion": 2,
+      "position": [ 1080, 300 ]
+    },
+    {
+      "parameters": {
+        "functionCode": "// 将推文扁平化为数据库列\\nreturn items.map(item => {\\n  const t = item.json || {};\\n  const u = t.user || {};\\n  return {\\n    json: {\\n      id_str: t.id_str || t.id || null,\\n      full_text: t.full_text || t.text || null,\\n      created_at: t.created_at || null,\\n      user_id: u.id_str || u.id || null,\\n      user_screen_name: u.screen_name || u.username || null,\\n      user_name: u.name || null,\\n      retweet_count: t.retweet_count || 0,\\n      reply_count: t.reply_count || 0,\\n      quote_count: t.quote_count || 0,\\n      favorite_count: t.favorite_count || t.like_count || 0,\\n      view_count: t.view_count || t.impression_count || 0\\n    }\\n  };\\n});"
+      },
+      "id": "8",
+      "name": "Map to DB Fields",
+      "type": "n8n-nodes-base.function",
+      "typeVersion": 2,
+      "position": [ 1300, 300 ]
+    },
+    {
+      "parameters": {
+        "operation": "insert",
+        "table": "twitter_tweet",
+        "columns": "id_str,full_text,created_at,user_id,user_screen_name,user_name,retweet_count,reply_count,quote_count,favorite_count,view_count",
+        "additionalFields": {
+          "onConflict": "ignore"
+        }
+      },
+      "id": "9",
+      "name": "MySQL Insert Tweets",
+      "type": "n8n-nodes-base.mySql",
+      "typeVersion": 1,
+      "position": [ 1520, 300 ],
+      "credentials": {
+        "mySql": {
+          "id": "TWITTER_DB_CREDENTIAL_PLACEHOLDER",
+          "name": "TwitterDB"
+        }
+      }
+    },
+    {
+      "parameters": {},
+      "id": "5",
+      "name": "Manual Trigger",
+      "type": "n8n-nodes-base.manualTrigger",
+      "typeVersion": 1,
+      "position": [ 200, 80 ]
+    },
+    {
+      "parameters": {
+        "values": {
+          "string": [
+            { "name": "apiKey", "value": "new1_038536908c7f4960812ee7d601f620a1" },
+            { "name": "listId", "value": "1896516371435122886" }
+          ],
+          "number": [
+            { "name": "maxResults", "value": 1 }
+          ]
+        },
+        "options": {}
+      },
+      "id": "6",
+      "name": "Set Ping Params",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 2,
+      "position": [ 420, 80 ]
+    },
+    {
+      "parameters": {
+        "url": "https://api.twitterapi.io/2/lists/{{$json.listId}}/tweets",
+        "options": {
+          "queryParametersUi": {
+            "parameter": [
+              { "name": "max_results", "value": "={{$json.maxResults}}" }
+            ]
+          },
+          "headers": [
+            { "name": "X-API-Key", "value": "={{$json.apiKey}}" },
+            { "name": "Accept", "value": "application/json" }
+          ]
+        }
+      },
+      "id": "7",
+      "name": "HTTP Ping List",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 2,
+      "position": [ 640, 80 ]
+    }
+  ],
+  "connections": {
+    "Cron 15m": {
+      "main": [ [ { "node": "Set Main Params", "type": "main", "index": 0 } ] ]
+    },
+    "Set Main Params": {
+      "main": [ [ { "node": "Expand List IDs", "type": "main", "index": 0 } ] ]
+    },
+    "Expand List IDs": {
+      "main": [ [ { "node": "HTTP Fetch List Tweets", "type": "main", "index": 0 } ] ]
+    },
+    "HTTP Fetch List Tweets": {
+      "main": [ [ { "node": "Filter Recent 20m", "type": "main", "index": 0 } ] ]
+    },
+    "Filter Recent 20m": {
+      "main": [ [ { "node": "Map to DB Fields", "type": "main", "index": 0 } ] ]
+    },
+    "Map to DB Fields": {
+      "main": [ [ { "node": "MySQL Insert Tweets", "type": "main", "index": 0 } ] ]
+    },
+    "Manual Trigger": {
+      "main": [ [ { "node": "Set Ping Params", "type": "main", "index": 0 } ] ]
+    },
+    "Set Ping Params": {
+      "main": [ [ { "node": "HTTP Ping List", "type": "main", "index": 0 } ] ]
+    }
+  },
+  "active": false,
+  "settings": {},
+  "versionId": "twitter-list-fetch-15m-with-ping-1"
+}

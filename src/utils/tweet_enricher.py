@@ -501,6 +501,7 @@ class TweetEnricher:
                     is_valid = True
                     self.logger.debug(f"推文 {tweet.id_str} 来自项目官方账号，跳过内容验证")
                 else:
+                    # 尝试AI验证，失败则fallback到关键词验证
                     is_valid = self._validate_crypto_content(tweet.full_text, use_ai=True)
                     
                 tweet.is_valid = is_valid
@@ -787,40 +788,47 @@ class TweetEnricher:
     def _ai_validate_content(self, text: str) -> Optional[bool]:
         """
         使用AI验证内容质量
-        
+
         Args:
             text: 推文内容
-            
+
         Returns:
             是否有效，None表示AI分析失败
         """
         try:
-            prompt = f"""
-            请分析以下推文是否符合以下标准：
-            1. 与加密货币、区块链、DeFi、NFT等相关
-            2. 不是明显的广告、推广或垃圾内容
-            3. 包含有价值的信息、观点或讨论
-            
-            推文内容: {text}
-            
-            请只返回 true 或 false：
-            - true: 符合标准的有效加密货币相关内容
-            - false: 不符合标准（非加密货币相关或明显广告）
-            """
-            
+            # 使用 /no_think 指令禁用Qwen3的思考过程
+            prompt = f"""/no_think
+分析推文是否为有价值的加密货币相关内容（非广告）。
+推文: {text}
+
+直接回答true或false，不要解释："""
+
             response = self.chatgpt._make_request([
-                {"role": "system", "content": "你是一个专业的内容质量检查员，专门识别有价值的加密货币内容。"},
+                {"role": "system", "content": "You are a content validator. Reply ONLY with 'true' or 'false', nothing else."},
                 {"role": "user", "content": prompt}
-            ], temperature=0.1, max_tokens=10)
-            
+            ], temperature=0.0, max_tokens=20)
+
             if response:
-                result = response.strip().lower()
-                return result == 'true'
-            
+                # 清理Qwen3可能返回的<think>标签（即使用/no_think也可能有空标签）
+                import re
+                cleaned = re.sub(r'<think>.*?</think>', '', response, flags=re.DOTALL)
+                cleaned = re.sub(r'</?think>', '', cleaned)  # 移除未闭合的标签
+                cleaned = cleaned.strip().lower()
+
+                # 严格匹配true或false
+                if cleaned == 'true':
+                    return True
+                elif cleaned == 'false':
+                    return False
+                else:
+                    # AI返回格式异常，记录并返回None（会fallback到关键词验证）
+                    self.logger.debug(f"AI验证返回异常格式: {repr(response[:50])}, fallback到关键词验证")
+                    return None
+
             return None
-            
+
         except Exception as e:
-            self.logger.warning(f"AI内容验证失败: {e}")
+            self.logger.debug(f"AI内容验证失败: {e}, fallback到关键词验证")
             return None
     
     def _analyze_tweet_sentiment(self, text: str, use_ai: bool = True) -> Optional[str]:

@@ -1,0 +1,160 @@
+================================================================================
+  KOL Following 爬取服务 - 快速参考指南
+================================================================================
+
+📁 目录位置:
+  /Users/qmk/Documents/QC/twitter/Carlwang/daily_kol_following_crawler
+
+🚀 常用命令:
+
+  # 启动服务（每天运行一次，每次处理10个KOL）
+  ./start_service_kol_following.sh start
+
+  # 自定义配置启动（每12小时，处理20个KOL）
+  ./start_service_kol_following.sh start 720 20
+
+  # 停止服务
+  ./start_service_kol_following.sh stop
+
+  # 重启服务
+  ./start_service_kol_following.sh restart
+
+  # 查看服务状态
+  ./start_service_kol_following.sh status
+
+  # 执行单次爬取
+  ./start_service_kol_following.sh once
+
+  # 执行单次爬取（处理50个KOL）
+  ./start_service_kol_following.sh once 50
+
+  # 查看日志（最新100行）
+  ./start_service_kol_following.sh logs 100
+
+  # 实时查看日志
+  tail -f service_kol_following.log
+
+  # 查看监控状态
+  ./start_service_kol_following.sh monitor
+
+📊 状态监控:
+
+  # 查看详细状态（进程、CPU、内存）
+  ./check_status.sh
+
+  # 查看成本统计
+  ./monitor_daily_cost.sh
+
+🗂️ 缓存管理:
+
+  # 查看缓存状态
+  cd /Users/qmk/Documents/QC/twitter/Carlwang
+  python daily_kol_following_crawler/fetch_kol_followings_new.py --cache-status
+
+  # 清理所有缓存
+  python daily_kol_following_crawler/fetch_kol_followings_new.py --clear-cache
+
+  # 从缓存恢复（只入库缓存数据，不调用API）
+  python daily_kol_following_crawler/fetch_kol_followings_new.py --resume
+
+🔧 高级用法:
+
+  # 测试模式（不调用API，不入库）
+  python daily_kol_following_crawler/fetch_kol_followings_new.py --test
+
+  # 模拟运行（调用API但不入库）
+  python daily_kol_following_crawler/fetch_kol_followings_new.py --dry-run --limit 1
+
+  # 正式运行（处理10个KOL）
+  python daily_kol_following_crawler/fetch_kol_followings_new.py --limit 10
+
+  # 自定义API间隔（1秒）
+  python daily_kol_following_crawler/fetch_kol_followings_new.py --limit 10 --sleep 1.0
+
+⚙️ 默认配置:
+
+  运行间隔: 1440 分钟（24小时，每天1次）
+  每次处理: 10 个 KOL
+  API间隔:  0.5 秒
+  数据源:   twitter_list_members_seed 表
+  目标表:   twitter_kol_all 表
+  API Key:  new1_038536908c7f4960812ee7d601f620a1
+  缓存目录: .kol_cache_new/
+
+📝 重要文件:
+
+  fetch_kol_followings_new.py              # 核心爬取脚本
+  start_service_kol_following.sh           # 服务管理脚本
+  service_kol_following_monitor.sh         # 监控脚本（cron自动运行）
+  check_status.sh                          # 状态检查脚本
+  monitor_daily_cost.sh                    # 成本统计脚本
+  service_kol_following.log                # 服务日志
+  monitor_kol_following.log                # 监控日志
+  twitter-crawler-kol-following.pid        # 进程PID文件
+  .kol_cache_new/progress.json             # 断点续传进度
+  README.md                                # 完整文档
+
+🔍 故障排查:
+
+  1. 服务无法启动
+     - 检查是否已有服务运行: ./check_status.sh
+     - 查看日志: ./start_service_kol_following.sh logs 50
+     - 检查Python脚本是否存在: ls -l fetch_kol_followings_new.py
+
+  2. API调用失败
+     - 检查API Key是否正确
+     - 查看日志中的API错误信息
+     - 检查网络连接
+
+  3. 数据未入库
+     - 检查数据库连接
+     - 查看日志中的数据库错误
+     - 确认目标表 twitter_kol_all 存在
+
+  4. 缓存占用空间过大
+     - 查看缓存状态: --cache-status
+     - 清理缓存: --clear-cache
+
+💡 最佳实践:
+
+  1. 首次运行建议先测试:
+     ./start_service_kol_following.sh once 5  # 只处理5个KOL
+
+  2. 定期查看成本统计:
+     ./monitor_daily_cost.sh
+
+  3. 监控服务状态:
+     ./check_status.sh
+
+  4. 定期备份进度文件:
+     cp .kol_cache_new/progress.json .kol_cache_new/progress.json.bak
+
+  5. 根据实际需求调整运行频率:
+     - 每天1次: 1440 分钟（默认）
+     - 每12小时: 720 分钟
+     - 每周1次: 10080 分钟
+
+📞 快速支持命令:
+
+  # 一键诊断（运行所有检查）
+  echo "=== 服务状态 ===" && \
+  ./check_status.sh && \
+  echo "=== 成本统计 ===" && \
+  ./monitor_daily_cost.sh && \
+  echo "=== 最新日志 ===" && \
+  tail -n 20 service_kol_following.log
+
+🌟 数据流向:
+
+  twitter_list_members_seed (seed表)
+      ↓
+  TwitterAPI (获取 following)
+      ↓
+  .kol_cache_new/ (缓存)
+      ↓
+  twitter_kol_all (全量KOL表)
+
+================================================================================
+更新时间: 2024-12-26
+版本: 1.0
+================================================================================

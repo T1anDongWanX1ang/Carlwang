@@ -2,10 +2,16 @@
 Twitter数据爬虫核心模块
 """
 import logging
+import os
 from typing import List, Dict, Any, Optional
 from datetime import datetime
 
-from .api.twitter_api import twitter_api
+# 后端可切换：默认使用 Twitter API (twitterapi)，设置环境变量 TWITTER_API_BACKEND=tweetscout 使用 TweetScout
+# 为了向后兼容KOL推文爬取，现在默认使用 twitterapi
+if os.getenv("TWITTER_API_BACKEND", "twitterapi").lower() == "tweetscout":
+    from .api.twitter_api import twitter_api as selected_api_client
+else:
+    from .api.twitter_api_twitterapi import twitter_api as selected_api_client
 from .database.tweet_dao import tweet_dao
 from .database.user_dao import user_dao
 from .database.quotation_dao import quotation_dao
@@ -29,7 +35,7 @@ class TwitterCrawler:
     def __init__(self):
         """初始化爬虫"""
         self.logger = get_logger(__name__)
-        self.api_client = twitter_api
+        self.api_client = selected_api_client
         self.tweet_dao = tweet_dao
         self.user_dao = user_dao
         self.quotation_dao = quotation_dao
@@ -106,7 +112,8 @@ class TwitterCrawler:
             for api_data in api_data_list:
                 try:
                     tweet_id = api_data.get('id_str')
-                    user_data = api_data.get('user')
+                    # 兼容两种API：TweetScout使用'user'，Twitter API使用'author'
+                    user_data = api_data.get('user') or api_data.get('author')
                     if tweet_id and user_data and isinstance(user_data, dict):
                         user_data_map[tweet_id] = user_data
                 except Exception as e:
@@ -770,7 +777,8 @@ class TwitterCrawler:
             for api_data in api_data_list:
                 try:
                     tweet_id = api_data.get('id_str')
-                    user_data = api_data.get('user')
+                    # 兼容 'user' 和 'author' 两种字段（新接口使用 author）
+                    user_data = api_data.get('user') or api_data.get('author')
                     if tweet_id and user_data and isinstance(user_data, dict):
                         user_data_map[tweet_id] = user_data
                 except Exception as e:
@@ -795,6 +803,27 @@ class TwitterCrawler:
             if tweet_saved_count > 0:
                 self.logger.info(f"成功保存 {tweet_saved_count} 条项目推文到数据库")
                 self.success_count += 1
+
+                # 打印 API 调用统计
+                api_stats = self.api_client.get_request_stats()
+                self.logger.info("=" * 50)
+                self.logger.info("📊 API 调用统计")
+                self.logger.info("=" * 50)
+                self.logger.info(f"总请求次数: {api_stats.get('total_requests', 0)}")
+                self.logger.info(f"获取推文数: {api_stats.get('tweets_fetched', 0)}")
+                self.logger.info(f"错误次数: {api_stats.get('error_count', 0)}")
+                self.logger.info(f"成功率: {api_stats.get('success_rate', 0):.2f}%")
+                if api_stats.get('total_requests', 0) > 0:
+                    self.logger.info(f"平均每次请求获取推文数: {api_stats.get('avg_tweets_per_request', 0):.1f}")
+                # 显示成本信息
+                self.logger.info("=" * 50)
+                self.logger.info("💰 API 成本统计")
+                self.logger.info("=" * 50)
+                self.logger.info(f"本次总成本: ${api_stats.get('total_cost_usd', 0):.6f} USD")
+                self.logger.info(f"平均每次请求成本: ${api_stats.get('avg_cost_per_request', 0):.6f} USD")
+                self.logger.info(f"每条推文平均成本: ${api_stats.get('total_cost_usd', 0) / max(api_stats.get('tweets_fetched', 1), 1):.6f} USD")
+                self.logger.info("=" * 50)
+
                 return True
             else:
                 self.logger.error("保存项目推文到数据库失败")

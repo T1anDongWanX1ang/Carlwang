@@ -137,21 +137,25 @@ class DataMapper:
     def extract_users_from_tweets(self, tweets_api_data: List[Dict[str, Any]]) -> List[TwitterUser]:
         """
         从推文API数据中提取用户信息
-        
+
         Args:
             tweets_api_data: 包含用户信息的推文API数据列表
-            
+
         Returns:
             用户对象列表
         """
         users = []
         user_ids_seen = set()
-        
+
         for tweet_data in tweets_api_data:
-            # 检查是否包含用户信息
+            # 检查是否包含用户信息（兼容 'user' 和 'author' 两种字段）
+            user_data = None
             if 'user' in tweet_data and isinstance(tweet_data['user'], dict):
                 user_data = tweet_data['user']
-                
+            elif 'author' in tweet_data and isinstance(tweet_data['author'], dict):
+                user_data = tweet_data['author']
+
+            if user_data:
                 # 避免重复用户
                 user_id = user_data.get('id_str')
                 if user_id and user_id not in user_ids_seen:
@@ -159,7 +163,7 @@ class DataMapper:
                     if user:
                         users.append(user)
                         user_ids_seen.add(user_id)
-        
+
         self.logger.info(f"从 {len(tweets_api_data)} 条推文中提取到 {len(users)} 个唯一用户")
         return users
     
@@ -213,7 +217,7 @@ class DataMapper:
                 return str(value) if value else None
         
         # 布尔字段处理
-        elif field_name == 'is_quote_status':
+        elif field_name in ['is_quote_status', 'is_retweet']:
             if isinstance(value, bool):
                 return value
             elif isinstance(value, str):
@@ -247,6 +251,7 @@ class DataMapper:
         """
         defaults = {
             'is_quote_status': False,
+            'is_retweet': False,
             'bookmark_count': 0,
             'favorite_count': 0,
             'quote_count': 0,
@@ -284,6 +289,7 @@ class DataMapper:
             'retweet_count': (int, type(None)),
             'view_count': (int, type(None)),
             'is_quote_status': (bool, type(None)),
+            'is_retweet': (bool, type(None)),
         }
         
         for field, expected_types in type_checks.items():

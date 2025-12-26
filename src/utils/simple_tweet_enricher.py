@@ -96,21 +96,27 @@ class SimpleTweetEnricher:
         try:
             self.logger.debug(f"开始简化增强项目推文 {tweet.id_str}")
             
-            # 1. 设置 kol_id（直接从user_data获取）
+            # 1. 设置 kol_id 和 user_name（直接从user_data获取）
             if tweet.id_str in user_data_map:
                 user_data = user_data_map[tweet.id_str]
                 tweet.kol_id = user_data.get('id_str')
-                
+                tweet.user_name = user_data.get('screen_name')
+
                 # 2. 生成推文URL（使用实际用户名）
                 screen_name = user_data.get('screen_name', 'unknown')
                 tweet.tweet_url = f"https://x.com/{screen_name}/status/{tweet.id_str}"
             else:
                 tweet.kol_id = None
+                tweet.user_name = None
                 tweet.tweet_url = f"https://x.com/unknown/status/{tweet.id_str}"
             
             # 3. 简化情绪分析
             tweet.sentiment = self._simple_sentiment_analysis(tweet.full_text)
-            
+
+            # 3.1 设置转发状态为False（项目推文一般不是转发）
+            # 注意：如果需要从API数据检测，需要传入api_data参数
+            tweet.is_retweet = False
+
             # 4. 简化公告检测
             tweet.isAnnounce = self._simple_announcement_detection(tweet.full_text)
             # 如果是公告推文，生成AI总结
@@ -153,20 +159,23 @@ class SimpleTweetEnricher:
             最小化增强的推文
         """
         try:
-            # 1. 设置kol_id（直接从用户数据获取）
+            # 1. 设置kol_id和user_name（直接从用户数据获取）
             if tweet.id_str in user_data_map:
                 user_data = user_data_map[tweet.id_str]
                 tweet.kol_id = user_data.get('id_str')
-                
+                tweet.user_name = user_data.get('screen_name')
+
                 # 2. 生成推文URL
                 screen_name = user_data.get('screen_name', 'unknown')
                 tweet.tweet_url = f"https://x.com/{screen_name}/status/{tweet.id_str}"
             else:
                 tweet.kol_id = None
+                tweet.user_name = None
                 tweet.tweet_url = f"https://x.com/unknown/status/{tweet.id_str}"
             
             # 3. 设置默认值
             tweet.sentiment = None
+            tweet.is_retweet = False
             tweet.isAnnounce = 0
             tweet.summary = None
             tweet.is_activity = 0
@@ -181,7 +190,35 @@ class SimpleTweetEnricher:
         except Exception as e:
             self.logger.error(f"最小化增强推文 {tweet.id_str} 失败: {e}")
             return tweet
-    
+
+    def _detect_retweet_status(self, api_data: Dict[str, Any]) -> bool:
+        """
+        从API数据中检测是否为转发推文
+
+        Args:
+            api_data: Twitter API返回的原始推文数据
+
+        Returns:
+            True表示是转发，False表示不是
+        """
+        try:
+            if not api_data:
+                return False
+
+            # 检查是否包含retweeted_status字段
+            # 当推文是转发时，Twitter API会返回retweeted_status对象
+            has_retweeted_status = 'retweeted_status' in api_data and api_data.get('retweeted_status')
+
+            if has_retweeted_status:
+                self.logger.debug(f"检测到转发推文: {api_data.get('id_str')}")
+                return True
+
+            return False
+
+        except Exception as e:
+            self.logger.error(f"检测转发状态失败: {e}")
+            return False
+
     def _simple_sentiment_analysis(self, text: str) -> Optional[str]:
         """
         简化的情绪分析 - 仅基于关键词

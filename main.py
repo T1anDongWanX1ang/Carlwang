@@ -32,7 +32,7 @@ def main():
     parser.add_argument('--max-pages', type=int, help='最大页数')
     parser.add_argument('--page-size', type=int, help='每页大小')
     parser.add_argument('--interval', type=int, help='调度间隔(分钟)')
-    parser.add_argument('--hours-limit', type=int, default=3, help='时间限制(小时)，只拉取过去N小时的推文，默认3小时')
+    parser.add_argument('--hours-limit', type=float, default=3, help='时间限制(小时，可为小数)，只拉取过去N小时的推文，默认3小时')
     parser.add_argument('--config', type=str, help='配置文件路径')
     
     args = parser.parse_args()
@@ -306,16 +306,21 @@ def run_project_analysis(args):
 def run_project_once(args):
     """单次执行项目推文爬取"""
     logger = get_logger(__name__)
-    
+
     logger.info("开始单次项目推文数据爬取...")
-    
+
+    # 设置使用项目推文专用表
+    from src.database.tweet_dao import tweet_dao
+    tweet_dao.table_name = 'twitter_tweet_back_test_cmc300'
+    logger.info(f"使用数据表: {tweet_dao.table_name}")
+
     # 执行爬取（使用配置文件中的list_ids_project进行并行获取，使用智能时间检测）
     success = crawler.crawl_project_tweets(
         max_pages=args.max_pages,
         page_size=args.page_size,
         hours_limit=args.hours_limit
     )
-    
+
     # 显示爬取统计信息
     stats = crawler.get_statistics()
     logger.info("=" * 30)
@@ -323,7 +328,7 @@ def run_project_once(args):
     for key, value in stats.items():
         logger.info(f"{key}: {value}")
     logger.info("=" * 30)
-    
+
     if success:
         logger.info("项目推文数据爬取完成")
         logger.info("单次执行完成")
@@ -336,9 +341,14 @@ def run_project_once(args):
 def run_project_scheduled(args):
     """定时调度执行项目推文爬取"""
     logger = get_logger(__name__)
-    
+
     logger.info("开始项目推文定时调度模式...")
-    
+
+    # 设置使用项目推文专用表
+    from src.database.tweet_dao import tweet_dao
+    tweet_dao.table_name = 'twitter_tweet_back_test_cmc300'
+    logger.info(f"使用数据表: {tweet_dao.table_name}")
+
     # 设置调度间隔
     if args.interval:
         scheduler.update_interval(args.interval)

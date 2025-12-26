@@ -1,13 +1,14 @@
 """
-Gemini API 客户端
+AI API 客户端
+支持多种AI服务：Gemini API、OpenAI兼容API（如Qwen）
 用于话题分析、内容生成和情感分析
-支持标准 Gemini API 和代理服务
 """
 import json
 import logging
 from typing import Dict, Any, List, Optional, Tuple
 import time
 
+# 尝试导入 Gemini
 try:
     from google import genai
     from google.genai import types
@@ -16,137 +17,184 @@ except ImportError:
     GENAI_TYPES_AVAILABLE = False
     types = None
 
+# 尝试导入 OpenAI
+try:
+    from openai import OpenAI
+    OPENAI_AVAILABLE = True
+except ImportError:
+    OPENAI_AVAILABLE = False
+    OpenAI = None
+
 from ..utils.config_manager import config
 
 
 class ChatGPTClient:
-    """Gemini API客户端"""
-    
+    """AI API客户端，支持Gemini和OpenAI兼容API"""
+
     def __init__(self):
-        """初始化Gemini客户端"""
+        """初始化AI客户端"""
         self.chatgpt_config = config.get('chatgpt', {})
         self.api_key = self.chatgpt_config.get('api_key', '')
         self.model = self.chatgpt_config.get('model', 'gemini-2.5-flash-lite')
         self.timeout = self.chatgpt_config.get('timeout', 30)
         self.max_retries = self.chatgpt_config.get('max_retries', 3)
         self.retry_delay = self.chatgpt_config.get('retry_delay', 2)
-        
-        # 支持自定义 API 端点（用于代理服务）
+
+        # 支持自定义 API 端点（用于代理服务或OpenAI兼容服务）
         self.base_url = self.chatgpt_config.get('base_url', None)
-        
+
+        # API类型：gemini 或 openai（默认gemini以保持向后兼容）
+        self.api_type = self.chatgpt_config.get('api_type', 'gemini')
+
         # 延迟初始化客户端，避免模块导入时的问题
         self.client = None
-        
+
         self.logger = logging.getLogger(__name__)
-        
+
         # 抑制 Google Gemini 库的详细日志输出
         logging.getLogger('google_genai.models').setLevel(logging.WARNING)
         logging.getLogger('google.genai').setLevel(logging.WARNING)
-        
+
+        # 抑制 OpenAI 库的详细日志输出
+        logging.getLogger('openai').setLevel(logging.WARNING)
+        logging.getLogger('httpx').setLevel(logging.WARNING)
+
         # 请求统计
         self.request_count = 0
         self.success_count = 0
         self.error_count = 0
-        
+
         # 批处理优化配置
         batch_config = self.chatgpt_config.get('batch_processing', {})
         opt_config = self.chatgpt_config.get('optimization', {})
-        
+
         self.enable_batch_consolidation = opt_config.get('enable_batch_consolidation', True)
         self.max_prompt_tokens = opt_config.get('max_prompt_tokens', 3000)
         self.content_merge_threshold = batch_config.get('content_merge_threshold', 2000)
-        
+
         # 响应缓存
         self.enable_response_caching = opt_config.get('enable_response_caching', True)
         self.response_cache = {} if self.enable_response_caching else None
         self.cache_ttl_hours = opt_config.get('cache_ttl_hours', 24)
-        
+
         # 打印模型配置信息
-        self.logger.info(f"🤖 Gemini客户端初始化完成")
+        if self.api_type == 'openai':
+            self.logger.info(f"🤖 OpenAI兼容API客户端初始化完成")
+        else:
+            self.logger.info(f"🤖 Gemini客户端初始化完成")
         self.logger.info(f"📋 使用模型: {self.model}")
         self.logger.info(f"🔑 API密钥: {self.api_key[:10]}...{self.api_key[-4:] if len(self.api_key) > 14 else '*' * 4}")
         if self.base_url:
-            self.logger.info(f"🌐 使用代理服务: {self.base_url}")
+            self.logger.info(f"🌐 自定义端点: {self.base_url}")
         else:
-            self.logger.info(f"🌐 使用标准 Gemini API")
-        self.logger.info(f"⚙️  超时设置: {self.timeout}秒，最大重试: {self.max_retries}次")
-    
-    def _get_client(self):
-        """获取Gemini客户端（延迟初始化），支持自定义端点"""
-        if self.client is None:
-            # 如果配置了自定义 base_url（代理服务），使用 HttpOptions
-            if self.base_url and GENAI_TYPES_AVAILABLE:
-                http_options = types.HttpOptions(base_url=self.base_url)
-                self.client = genai.Client(api_key=self.api_key, http_options=http_options)
+            if self.api_type == 'openai':
+                self.logger.info(f"🌐 使用标准 OpenAI API")
             else:
-                # 标准 Gemini API
-                self.client = genai.Client(api_key=self.api_key)
+                self.logger.info(f"🌐 使用标准 Gemini API")
+        self.logger.info(f"⚙️  超时设置: {self.timeout}秒，最大重试: {self.max_retries}次")
+
+    def _get_client(self):
+        """获取API客户端（延迟初始化），支持自定义端点"""
+        if self.client is None:
+            if self.api_type == 'openai':
+                # OpenAI 兼容 API
+                if not OPENAI_AVAILABLE:
+                    raise ImportError("OpenAI库未安装。请运行: pip install openai")
+
+                if self.base_url:
+                    self.client = OpenAI(api_key=self.api_key, base_url=self.base_url, timeout=self.timeout)
+                else:
+                    self.client = OpenAI(api_key=self.api_key, timeout=self.timeout)
+            else:
+                # Gemini API
+                if not GENAI_TYPES_AVAILABLE:
+                    raise ImportError("Google Gemini库未安装。请运行: pip install google-genai")
+
+                if self.base_url:
+                    http_options = types.HttpOptions(base_url=self.base_url)
+                    self.client = genai.Client(api_key=self.api_key, http_options=http_options)
+                else:
+                    self.client = genai.Client(api_key=self.api_key)
         return self.client
-    
+
     def _make_request(self, messages: List[Dict[str, str]], **kwargs) -> Optional[str]:
         """
-        发起Gemini API请求，包含重试机制
-        
+        发起API请求，包含重试机制
+
         Args:
             messages: 对话消息列表
-            **kwargs: 其他参数（temperature, max_tokens等，Gemini可能不支持所有参数）
-            
+            **kwargs: 其他参数（temperature, max_tokens等）
+
         Returns:
             生成的文本内容或None
         """
         for attempt in range(self.max_retries):
             try:
-                self.logger.debug(f"发起Gemini请求 (尝试 {attempt + 1}/{self.max_retries})")
-                
-                # Gemini API调用
-                client = self._get_client()
-                chat = client.chats.create(model=self.model)
-                
-                # 将messages转换为Gemini格式
-                # Gemini使用单条消息，需要合并system和user消息
-                system_content = ""
-                user_content = ""
-                for msg in messages:
-                    role = msg.get('role', 'user')
-                    content = msg.get('content', '')
-                    if role == 'system':
-                        system_content = content
-                    elif role == 'user':
-                        if user_content:
-                            user_content += "\n\n" + content
-                        else:
-                            user_content = content
-                
-                # 合并system和user内容
-                if system_content:
-                    prompt = f"{system_content}\n\n{user_content}"
+                self.logger.debug(f"发起API请求 (尝试 {attempt + 1}/{self.max_retries})")
+
+                if self.api_type == 'openai':
+                    # OpenAI 兼容 API 调用
+                    client = self._get_client()
+
+                    response = client.chat.completions.create(
+                        model=self.model,
+                        messages=messages,
+                        temperature=kwargs.get('temperature', 0.7),
+                        max_tokens=kwargs.get('max_tokens', 2000)
+                    )
+
+                    content = response.choices[0].message.content
+
                 else:
-                    prompt = user_content
-                
-                response = chat.send_message(prompt)
-                content = response.text
-                
+                    # Gemini API 调用
+                    client = self._get_client()
+                    chat = client.chats.create(model=self.model)
+
+                    # 将messages转换为Gemini格式
+                    # Gemini使用单条消息，需要合并system和user消息
+                    system_content = ""
+                    user_content = ""
+                    for msg in messages:
+                        role = msg.get('role', 'user')
+                        content_text = msg.get('content', '')
+                        if role == 'system':
+                            system_content = content_text
+                        elif role == 'user':
+                            if user_content:
+                                user_content += "\n\n" + content_text
+                            else:
+                                user_content = content_text
+
+                    # 合并system和user内容
+                    if system_content:
+                        prompt = f"{system_content}\n\n{user_content}"
+                    else:
+                        prompt = user_content
+
+                    response = chat.send_message(prompt)
+                    content = response.text
+
                 self.request_count += 1
                 self.success_count += 1
-                
-                self.logger.debug(f"Gemini请求成功，生成内容长度: {len(content)}")
-                
+
+                self.logger.debug(f"API请求成功，生成内容长度: {len(content)}")
+
                 return content
-                
+
             except Exception as e:
                 error_type = type(e).__name__
                 error_str = str(e).lower()
-                
+
                 # 处理速率限制错误
                 if 'RateLimitError' in error_type or 'rate_limit' in error_str or '429' in error_str or 'quota' in error_str:
-                    self.logger.warning(f"Gemini速率限制，等待 {self.retry_delay} 秒后重试")
+                    self.logger.warning(f"API速率限制，等待 {self.retry_delay} 秒后重试")
                     self.logger.error(f"RateLimitError详情: {str(e)}")
                     time.sleep(self.retry_delay * (attempt + 1))
                     continue
-                
+
                 # 处理API错误
                 if 'APIError' in error_type or 'api' in error_str or '400' in error_str or '500' in error_str:
-                    self.logger.error(f"Gemini API错误: {e}")
+                    self.logger.error(f"API错误: {e}")
                     if attempt < self.max_retries - 1:
                         time.sleep(self.retry_delay)
                         continue
@@ -154,7 +202,7 @@ class ChatGPTClient:
                         break
                 
                 # 其他异常
-                self.logger.error(f"Gemini请求异常: {e}")
+                self.logger.error(f"API请求异常: {e}")
                 if attempt < self.max_retries - 1:
                     time.sleep(self.retry_delay)
                     continue

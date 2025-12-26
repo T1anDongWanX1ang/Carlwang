@@ -38,16 +38,16 @@ class TweetDAO:
             return False
 
         try:
-            # 包含所有字段（包括新增的project_id、topic_id等）
+            # 包含所有字段（包括新增的project_id、topic_id、is_retweet等）
             sql = f"""
             INSERT INTO {self.table_name} (
                 id_str, conversation_id_str, in_reply_to_status_id_str,
-                full_text, created_at, created_at_datetime,
+                full_text, is_quote_status, is_retweet, created_at, created_at_datetime,
                 bookmark_count, favorite_count, quote_count, reply_count,
                 retweet_count, view_count, engagement_total, update_time,
-                kol_id, entity_id, project_id, topic_id, is_valid, sentiment, tweet_url, link_url, token_tag, project_tag, isAnnounce, summary, is_real_project_tweet
+                kol_id, entity_id, project_id, topic_id, narrative_id, is_valid, sentiment, tweet_url, link_url, token_tag, project_tag, isAnnounce, is_announce, summary, is_activity, activity_detail, is_real_project_tweet, etl_flag
             ) VALUES (
-                %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s
+                %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s
             )
             """
 
@@ -57,6 +57,8 @@ class TweetDAO:
                 tweet_data['conversation_id_str'],
                 tweet_data['in_reply_to_status_id_str'],
                 tweet_data['full_text'],
+                tweet_data.get('is_quote_status', False),
+                tweet_data.get('is_retweet', False),
                 tweet_data['created_at'],
                 tweet_data['created_at_datetime'],
                 tweet_data['bookmark_count'],
@@ -71,15 +73,20 @@ class TweetDAO:
                 tweet_data['entity_id'],
                 tweet_data['project_id'],
                 tweet_data['topic_id'],
+                tweet_data.get('narrative_id'),
                 tweet_data['is_valid'],
                 tweet_data['sentiment'],
                 tweet_data['tweet_url'],
                 tweet_data.get('link_url'),  # 使用get方法以防字段不存在
                 tweet_data.get('token_tag'),
                 tweet_data.get('project_tag'),
-                tweet_data.get('is_announce', 0),  # 默认为0
+                tweet_data.get('is_announce', 0),  # isAnnounce字段
+                tweet_data.get('is_announce', 0),  # is_announce字段
                 tweet_data.get('summary'),  # 公告总结
-                tweet_data.get('is_real_project_tweet', 0)  # 是否为项目官方推文
+                tweet_data.get('is_activity', 0),  # 是否为活动
+                tweet_data.get('activity_detail'),  # 活动详情
+                tweet_data.get('is_real_project_tweet', 0),  # 是否为项目官方推文
+                tweet_data.get('etl_flag', 0)  # ETL标记
             )
             
             affected_rows = self.db_manager.execute_update(sql, params)
@@ -116,16 +123,16 @@ class TweetDAO:
             return False
 
         try:
-            # 包含所有字段（包括新增的project_id、topic_id等）
+            # 包含所有字段（包括新增的project_id、topic_id、is_retweet等）
             sql = f"""
             INSERT INTO {self.table_name} (
                 id_str, conversation_id_str, in_reply_to_status_id_str,
-                full_text, created_at, created_at_datetime,
+                full_text, is_quote_status, is_retweet, created_at, created_at_datetime,
                 bookmark_count, favorite_count, quote_count, reply_count,
                 retweet_count, view_count, engagement_total, update_time,
-                kol_id, entity_id, project_id, topic_id, is_valid, sentiment, tweet_url, link_url, token_tag, project_tag, isAnnounce, summary, is_real_project_tweet
+                kol_id, entity_id, project_id, topic_id, narrative_id, is_valid, sentiment, tweet_url, link_url, token_tag, project_tag, isAnnounce, is_announce, summary, is_activity, activity_detail, is_real_project_tweet, etl_flag
             ) VALUES (
-                %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s
+                %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s
             )
             """
 
@@ -135,6 +142,8 @@ class TweetDAO:
                 tweet_data['conversation_id_str'],
                 tweet_data['in_reply_to_status_id_str'],
                 tweet_data['full_text'],
+                tweet_data.get('is_quote_status', False),
+                tweet_data.get('is_retweet', False),
                 tweet_data['created_at'],
                 tweet_data['created_at_datetime'],
                 tweet_data['bookmark_count'],
@@ -149,15 +158,20 @@ class TweetDAO:
                 tweet_data['entity_id'],
                 tweet_data['project_id'],
                 tweet_data['topic_id'],
+                tweet_data.get('narrative_id'),
                 tweet_data['is_valid'],
                 tweet_data['sentiment'],
                 tweet_data['tweet_url'],
                 tweet_data.get('link_url'),  # 使用get方法以防字段不存在
                 tweet_data.get('token_tag'),
                 tweet_data.get('project_tag'),
-                tweet_data.get('is_announce', 0),  # 默认为0
+                tweet_data.get('is_announce', 0),  # isAnnounce字段
+                tweet_data.get('is_announce', 0),  # is_announce字段
                 tweet_data.get('summary'),  # 公告总结
-                tweet_data.get('is_real_project_tweet', 0)  # 是否为项目官方推文
+                tweet_data.get('is_activity', 0),  # 是否为活动
+                tweet_data.get('activity_detail'),  # 活动详情
+                tweet_data.get('is_real_project_tweet', 0),  # 是否为项目官方推文
+                tweet_data.get('etl_flag', 0)  # ETL标记
             )
             
             affected_rows = self.db_manager.execute_update(sql, params)
@@ -199,53 +213,102 @@ class TweetDAO:
             return 0
         
         try:
-            # 包含所有字段（包括新增的project_id、topic_id等）
-            sql = f"""
-            INSERT INTO {self.table_name} (
-                id_str, conversation_id_str, in_reply_to_status_id_str,
-                full_text, created_at, created_at_datetime,
-                bookmark_count, favorite_count, quote_count, reply_count,
-                retweet_count, view_count, engagement_total, update_time,
-                kol_id, entity_id, project_id, topic_id, is_valid, sentiment, tweet_url, link_url, token_tag, project_tag, isAnnounce, summary, is_real_project_tweet
-            ) VALUES (
-                %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s
-            )
-            """
+            # 根据表名使用不同的字段映射
+            if self.table_name == 'twitter_tweet_back_test_cmc300':
+                # twitter_tweet_back_test_cmc300 表字段（使用 user_id 而不是 kol_id）
+                sql = f"""
+                INSERT INTO {self.table_name} (
+                    id_str, conversation_id_str, in_reply_to_status_id_str,
+                    full_text, created_at, created_at_datetime,
+                    bookmark_count, favorite_count, quote_count, reply_count,
+                    retweet_count, view_count, engagement_total, update_time,
+                    user_id, user_name, tweet_url, sentiment, link_url, isAnnounce, summary, is_activity, is_retweet
+                ) VALUES (
+                    %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s
+                )
+                """
+            else:
+                # twitter_tweet 表字段（包含 kol_id, project_id, topic_id 等）
+                sql = f"""
+                INSERT INTO {self.table_name} (
+                    id_str, conversation_id_str, in_reply_to_status_id_str,
+                    full_text, created_at, created_at_datetime,
+                    bookmark_count, favorite_count, quote_count, reply_count,
+                    retweet_count, view_count, engagement_total, update_time,
+                    kol_id, entity_id, project_id, topic_id, narrative_id, is_valid, sentiment, tweet_url, link_url, token_tag, project_tag, isAnnounce, is_announce, summary, is_activity, activity_detail, is_real_project_tweet, etl_flag
+                ) VALUES (
+                    %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s
+                )
+                """
 
             success_count = 0
             for tweet in valid_tweets:
                 try:
                     tweet_data = tweet.to_dict()
-                    
-                    params = (
-                        tweet_data['id_str'],
-                        tweet_data['conversation_id_str'],
-                        tweet_data['in_reply_to_status_id_str'],
-                        tweet_data['full_text'],
-                        tweet_data['created_at'],
-                        tweet_data['created_at_datetime'],
-                        tweet_data['bookmark_count'],
-                        tweet_data['favorite_count'],
-                        tweet_data['quote_count'],
-                        tweet_data['reply_count'],
-                        tweet_data['retweet_count'],
-                        tweet_data['view_count'],
-                        tweet_data['engagement_total'],
-                        tweet_data['update_time'],
-                        tweet_data['kol_id'],
-                        tweet_data['entity_id'],
-                        tweet_data['project_id'],
-                        tweet_data['topic_id'],
-                        tweet_data['is_valid'],
-                        tweet_data['sentiment'],
-                        tweet_data['tweet_url'],
-                        tweet_data.get('link_url'),  # 使用get方法以防字段不存在
-                        tweet_data.get('token_tag'),
-                        tweet_data.get('project_tag'),
-                        tweet_data.get('is_announce', 0),  # 默认为0
-                        tweet_data.get('summary'),  # 公告总结
-                        tweet_data.get('is_real_project_tweet', 0)  # 是否为项目官方推文
-                    )
+
+                    if self.table_name == 'twitter_tweet_back_test_cmc300':
+                        # twitter_tweet_back_test_cmc300 表参数（使用 user_id）
+                        params = (
+                            tweet_data['id_str'],
+                            tweet_data['conversation_id_str'],
+                            tweet_data['in_reply_to_status_id_str'],
+                            tweet_data['full_text'],
+                            tweet_data['created_at'],
+                            tweet_data['created_at_datetime'],
+                            tweet_data['bookmark_count'],
+                            tweet_data['favorite_count'],
+                            tweet_data['quote_count'],
+                            tweet_data['reply_count'],
+                            tweet_data['retweet_count'],
+                            tweet_data['view_count'],
+                            tweet_data['engagement_total'],
+                            tweet_data['update_time'],
+                            tweet_data.get('kol_id'),  # kol_id 对应表的 user_id
+                            tweet_data.get('user_name'),  # user_name
+                            tweet_data.get('tweet_url'),
+                            tweet_data.get('sentiment'),
+                            tweet_data.get('link_url'),
+                            tweet_data.get('is_announce', 0),
+                            tweet_data.get('summary'),
+                            tweet_data.get('is_activity', 0),
+                            1 if tweet_data.get('is_retweet') else 0,  # 布尔转整数
+                        )
+                    else:
+                        # twitter_tweet 表参数（使用 kol_id）
+                        params = (
+                            tweet_data['id_str'],
+                            tweet_data['conversation_id_str'],
+                            tweet_data['in_reply_to_status_id_str'],
+                            tweet_data['full_text'],
+                            tweet_data['created_at'],
+                            tweet_data['created_at_datetime'],
+                            tweet_data['bookmark_count'],
+                            tweet_data['favorite_count'],
+                            tweet_data['quote_count'],
+                            tweet_data['reply_count'],
+                            tweet_data['retweet_count'],
+                            tweet_data['view_count'],
+                            tweet_data['engagement_total'],
+                            tweet_data['update_time'],
+                            tweet_data['kol_id'],
+                            tweet_data['entity_id'],
+                            tweet_data['project_id'],
+                            tweet_data['topic_id'],
+                            tweet_data.get('narrative_id'),
+                            tweet_data['is_valid'],
+                            tweet_data['sentiment'],
+                            tweet_data['tweet_url'],
+                            tweet_data.get('link_url'),
+                            tweet_data.get('token_tag'),
+                            tweet_data.get('project_tag'),
+                            tweet_data.get('is_announce', 0),
+                            tweet_data.get('is_announce', 0),
+                            tweet_data.get('summary'),
+                            tweet_data.get('is_activity', 0),
+                            tweet_data.get('activity_detail'),
+                            tweet_data.get('is_real_project_tweet', 0),
+                            tweet_data.get('etl_flag', 0)
+                        )
                     
                     affected_rows = self.db_manager.execute_update(sql, params)
                     if affected_rows > 0:

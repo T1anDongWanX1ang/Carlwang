@@ -20,6 +20,7 @@ class Tweet:
     in_reply_to_status_id_str: Optional[str] = None
     full_text: Optional[str] = None
     is_quote_status: Optional[bool] = False
+    is_retweet: Optional[bool] = False  # 是否为转发推文
     created_at: Optional[str] = None
     created_at_datetime: Optional[datetime] = None
     bookmark_count: Optional[int] = 0
@@ -33,9 +34,11 @@ class Tweet:
     
     # 新增字段
     kol_id: Optional[str] = None  # KOL用户ID
+    user_name: Optional[str] = None  # 用户名（screen_name）
     entity_id: Optional[str] = None  # 实体ID（如话题ID）- 保留兼容性
     project_id: Optional[str] = None  # 项目ID（project_xxx格式）
     topic_id: Optional[str] = None  # 话题ID（topic_xxx格式）
+    narrative_id: Optional[str] = None  # 叙事ID（narrative_xxx格式）
     is_valid: Optional[bool] = None  # 是否为有效的加密货币相关内容
     sentiment: Optional[str] = None  # 情绪倾向：Positive/Negative/Neutral
     tweet_url: Optional[str] = None  # 推文URL
@@ -44,7 +47,10 @@ class Tweet:
     project_tag: Optional[str] = None  # 项目标签（匹配RootData的项目名称）
     is_announce: Optional[int] = 0  # 是否为重要公告（0=否，1=是）
     summary: Optional[str] = None  # AI总结（针对公告推文的简洁总结）
+    is_activity: Optional[int] = 0  # 是否为活动（0=否，1=是）
+    activity_detail: Optional[str] = None  # 活动详情（JSON格式）
     is_real_project_tweet: Optional[int] = 0  # 是否为项目官方推文（0=否，1=是，通过kol_id匹配twitter_kol_token_project表判断）
+    etl_flag: Optional[int] = 0  # ETL标记（0=未处理，1=已处理）
 
     def __post_init__(self):
         """初始化后处理"""
@@ -177,6 +183,7 @@ class Tweet:
             'in_reply_to_status_id_str': self.in_reply_to_status_id_str,
             'full_text': self.full_text,
             'is_quote_status': self.is_quote_status,
+            'is_retweet': self.is_retweet,
             'created_at': self.created_at,
             'created_at_datetime': self.created_at_datetime,
             'bookmark_count': self.bookmark_count,
@@ -188,9 +195,11 @@ class Tweet:
             'engagement_total': self.engagement_total,
             'update_time': self.update_time or datetime.now(),
             'kol_id': self.kol_id,
+            'user_name': self.user_name,  # 用户名（screen_name）
             'entity_id': self.entity_id,
             'project_id': self.project_id,
             'topic_id': self.topic_id,
+            'narrative_id': self.narrative_id,
             'is_valid': self.is_valid,
             'sentiment': self.sentiment,
             'tweet_url': self.tweet_url,
@@ -199,7 +208,10 @@ class Tweet:
             'project_tag': self.project_tag,
             'is_announce': self.is_announce,
             'summary': self.summary,
-            'is_real_project_tweet': getattr(self, 'is_real_project_tweet', 0)
+            'is_activity': self.is_activity,
+            'activity_detail': self.activity_detail,
+            'is_real_project_tweet': getattr(self, 'is_real_project_tweet', 0),
+            'etl_flag': getattr(self, 'etl_flag', 0)
         }
     
     def validate(self) -> bool:
