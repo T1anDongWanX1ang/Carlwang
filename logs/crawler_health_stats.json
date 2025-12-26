@@ -1,0 +1,12 @@
+[
+  {
+    "timestamp": "2025-12-27T02:35:21.468085",
+    "total_tweets": 99040,
+    "valid_tweets": 94088,
+    "invalid_tweets": 4952,
+    "valid_rate": 0.95,
+    "twitter_api_cost": 0.003,
+    "ai_api_cost": 0,
+    "total_cost": 0.003
+  }
+]

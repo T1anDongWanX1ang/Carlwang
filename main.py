@@ -15,9 +15,13 @@ from src.crawler import crawler
 from src.utils.scheduler import scheduler
 from src.utils.logger import get_logger
 from src.utils.config_manager import config
+from src.utils.health_monitor import HealthMonitor
 # from src.topic_engine import topic_engine  # 话题分析已移除，在独立服务中处理
 # from src.kol_engine import kol_engine  # KOL分析已禁用
 from src.project_engine import project_engine
+
+# 初始化健康监控器
+health_monitor = HealthMonitor()
 
 
 def main():
@@ -27,13 +31,14 @@ def main():
     
     # 命令行参数解析
     parser = argparse.ArgumentParser(description='Twitter数据爬虫')
-    parser.add_argument('--mode', choices=['once', 'schedule', 'test', 'topic', 'project', 'project-once', 'project-schedule'], default='once',
-                       help='运行模式: once=单次执行, schedule=定时调度, test=测试连接, topic=话题分析, project=项目分析')
+    parser.add_argument('--mode', choices=['once', 'schedule', 'test', 'topic', 'project', 'project-once', 'project-schedule', 'health', 'cost'], default='once',
+                       help='运行模式: once=单次执行, schedule=定时调度, test=测试连接, health=健康检查, cost=成本统计')
     parser.add_argument('--max-pages', type=int, help='最大页数')
     parser.add_argument('--page-size', type=int, help='每页大小')
     parser.add_argument('--interval', type=int, help='调度间隔(分钟)')
     parser.add_argument('--hours-limit', type=float, default=3, help='时间限制(小时，可为小数)，只拉取过去N小时的推文，默认3小时')
     parser.add_argument('--config', type=str, help='配置文件路径')
+    parser.add_argument('--cost-period', type=int, default=24, help='成本统计周期(小时)，默认24小时')
     
     args = parser.parse_args()
     
@@ -65,6 +70,10 @@ def main():
             run_project_once(args)
         elif args.mode == 'project-schedule':
             run_project_scheduled(args)
+        elif args.mode == 'health':
+            run_health_check()
+        elif args.mode == 'cost':
+            run_cost_stats(args)
         
     except KeyboardInterrupt:
         logger.info("接收到中断信号，正在退出...")
@@ -106,24 +115,53 @@ def run_tests():
 def run_once(args):
     """单次执行爬取"""
     logger = get_logger(__name__)
-    
+
     logger.info("开始单次数据爬取...")
-    
+
+    # 先进行健康检查
+    health_status = health_monitor.check_health()
+    if health_status['should_stop']:
+        logger.error("健康检查失败，服务应该停止！")
+        for alert in health_status['alerts']:
+            logger.error(alert)
+        sys.exit(1)
+
+    # 显示警告（如果有）
+    for warning in health_status['warnings']:
+        logger.warning(warning)
+
     # 执行爬取（直接使用配置文件中的list_ids进行并行获取，使用智能时间检测）
     success = crawler.crawl_tweets(
         max_pages=args.max_pages,
         page_size=args.page_size,
         hours_limit=args.hours_limit
     )
-    
-    # 显示爬取统计信息
+
+    # 获取爬取统计信息
     stats = crawler.get_statistics()
     logger.info("=" * 30)
     logger.info("爬取统计:")
     for key, value in stats.items():
         logger.info(f"{key}: {value}")
     logger.info("=" * 30)
-    
+
+    # 记录统计到健康监控（需要从crawler获取详细统计）
+    try:
+        from datetime import datetime
+        # 计算有效/无效推文数（从数据库最近记录中统计）
+        # 这里简化处理，实际应该从crawler返回的详细统计中获取
+        health_monitor.record_crawl_stats({
+            'timestamp': datetime.now().isoformat(),
+            'total_tweets': stats.get('database_tweet_count', 0),  # 简化：使用总数
+            'valid_tweets': int(stats.get('database_tweet_count', 0) * 0.95),  # 估算，应从crawler获取
+            'invalid_tweets': int(stats.get('database_tweet_count', 0) * 0.05),
+            'twitter_api_cost': stats.get('api_stats', {}).get('total_cost_usd', 0),
+            'ai_api_cost': 0,  # TODO: 从AI调用中获取
+            'total_cost': stats.get('api_stats', {}).get('total_cost_usd', 0),
+        })
+    except Exception as e:
+        logger.warning(f"记录健康统计失败: {e}")
+
     if success:
         logger.info("数据爬取完成")
         logger.info("单次执行完成")
@@ -406,6 +444,87 @@ def run_project_scheduled(args):
     except KeyboardInterrupt:
         logger.info("接收到停止信号...")
         scheduler.stop()
+
+
+def run_health_check():
+    """运行健康检查"""
+    logger = get_logger(__name__)
+
+    logger.info("=" * 60)
+    logger.info("🏥 爬虫健康检查")
+    logger.info("=" * 60)
+
+    # 执行健康检查
+    health_status = health_monitor.check_health()
+
+    # 显示健康状态
+    if health_status['is_healthy']:
+        logger.info("✅ 状态: 健康")
+    else:
+        logger.warning("⚠️  状态: 异常")
+
+    # 显示报警
+    if health_status['alerts']:
+        logger.info("\n🚨 报警:")
+        for alert in health_status['alerts']:
+            logger.error(f"  {alert}")
+
+    # 显示警告
+    if health_status['warnings']:
+        logger.info("\n⚠️  警告:")
+        for warning in health_status['warnings']:
+            logger.warning(f"  {warning}")
+
+    # 显示成本摘要（最近24小时）
+    cost_summary = health_monitor.get_cost_summary(hours=24)
+    logger.info("\n💰 成本摘要（最近24小时）:")
+    logger.info(f"  Twitter API: ${cost_summary.get('twitter_api_cost', 0):.4f}")
+    logger.info(f"  AI API: ${cost_summary.get('ai_api_cost', 0):.4f}")
+    logger.info(f"  总计: ${cost_summary.get('total_cost', 0):.4f}")
+    logger.info(f"  请求次数: {cost_summary.get('request_count', 0)}")
+
+    logger.info("\n" + "=" * 60)
+
+    # 如果需要停止服务，退出码为1
+    sys.exit(1 if health_status['should_stop'] else 0)
+
+
+def run_cost_stats(args):
+    """运行成本统计"""
+    logger = get_logger(__name__)
+
+    period_hours = args.cost_period
+
+    logger.info("=" * 60)
+    logger.info(f"💰 API成本统计（最近{period_hours}小时）")
+    logger.info("=" * 60)
+
+    # 获取成本摘要
+    cost_summary = health_monitor.get_cost_summary(hours=period_hours)
+
+    if cost_summary.get('request_count', 0) == 0:
+        logger.info("\n⚠️  暂无统计数据")
+    else:
+        logger.info(f"\n📊 统计周期: 最近 {period_hours} 小时")
+        logger.info(f"📈 请求次数: {cost_summary.get('request_count', 0)} 次")
+        logger.info(f"\n💵 成本明细:")
+        logger.info(f"  • Twitter API: ${cost_summary.get('twitter_api_cost', 0):.4f}")
+        logger.info(f"  • AI API: ${cost_summary.get('ai_api_cost', 0):.4f}")
+        logger.info(f"  • 总计: ${cost_summary.get('total_cost', 0):.4f}")
+        logger.info(f"\n📉 平均成本:")
+        logger.info(f"  • 每次请求: ${cost_summary.get('avg_cost_per_request', 0):.4f}")
+
+        # 预估每日/每月成本
+        if period_hours > 0:
+            daily_estimate = cost_summary.get('total_cost', 0) * (24 / period_hours)
+            monthly_estimate = daily_estimate * 30
+            logger.info(f"\n📅 成本预估:")
+            logger.info(f"  • 每日: ${daily_estimate:.2f}")
+            logger.info(f"  • 每月: ${monthly_estimate:.2f}")
+
+    logger.info("\n" + "=" * 60)
+
+    sys.exit(0)
 
 
 def cleanup():

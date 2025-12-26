@@ -295,50 +295,55 @@ class ChatGPTClient:
     def analyze_sentiment(self, text: str) -> Optional[Dict[str, Any]]:
         """
         分析文本情感
-        
+
         Args:
             text: 文本内容
-            
+
         Returns:
             情感分析结果 {"sentiment": "positive/negative/neutral", "confidence": 0.0-1.0, "score": 0-100}
         """
         try:
-            prompt = f"""
-            Please analyze the sentiment tendency of the following cryptocurrency-related text:
+            prompt = f"""/no_think
+Please analyze the sentiment tendency of the following cryptocurrency-related text:
 
-            Text content: {text}
+Text content: {text}
 
-            Please evaluate:
-            1. sentiment: Sentiment direction (positive/negative/neutral)
-            2. confidence: Confidence level (0.0-1.0, indicating certainty of judgment)
-            3. reasoning: Reasoning for judgment (brief explanation)
+Please evaluate:
+1. sentiment: Sentiment direction (positive/negative/neutral)
+2. confidence: Confidence level (0.0-1.0, indicating certainty of judgment)
+3. reasoning: Reasoning for judgment (brief explanation)
 
-            Notes:
-            - Focus on cryptocurrency market sentiment
-            - Consider the meaning of technical terms and slang
-            - positive: bullish, optimistic, supportive
-            - negative: bearish, pessimistic, critical
-            - neutral: neutral, objective analysis
+Notes:
+- Focus on cryptocurrency market sentiment
+- Consider the meaning of technical terms and slang
+- positive: bullish, optimistic, supportive
+- negative: bearish, pessimistic, critical
+- neutral: neutral, objective analysis
 
-            Please return in JSON format:
-            {{"sentiment": "positive", "confidence": 0.8, "reasoning": "Reasoning"}}
-            """
-            
+Please return in JSON format:
+{{"sentiment": "positive", "confidence": 0.8, "reasoning": "Reasoning"}}
+"""
+
             messages = [
-                {"role": "system", "content": "You are a professional cryptocurrency sentiment analyst skilled in understanding market sentiment and investor psychology."},
+                {"role": "system", "content": "You are a professional cryptocurrency sentiment analyst. Reply ONLY with valid JSON, nothing else."},
                 {"role": "user", "content": prompt}
             ]
-            
+
             response = self._make_request(
                 messages=messages,
-                temperature=0.2,
-                max_tokens=150
+                temperature=0.0,
+                max_tokens=200
             )
-            
+
             if response:
                 try:
+                    # 清理Qwen3可能返回的<think>标签
+                    import re
+                    cleaned_response = re.sub(r'<think>.*?</think>', '', response, flags=re.DOTALL)
+                    cleaned_response = re.sub(r'</?think>', '', cleaned_response)  # 移除未闭合的标签
+
                     # 清理响应内容，移除代码块标记
-                    cleaned_response = response.strip()
+                    cleaned_response = cleaned_response.strip()
                     if cleaned_response.startswith('```json'):
                         cleaned_response = cleaned_response[7:]  # 移除 ```json
                     if cleaned_response.startswith('```'):
@@ -1753,44 +1758,49 @@ Return format:
             提取的token symbol列表（如["BTC", "ETH"]），如果无法提取则返回None
         """
         try:
-            prompt = f"""
-            Please analyze the following cryptocurrency-related tweet and extract all mentioned token symbols.
+            prompt = f"""/no_think
+Please analyze the following cryptocurrency-related tweet and extract all mentioned token symbols.
 
-            Tweet content: {tweet_content}
+Tweet content: {tweet_content}
 
-            Please identify:
-            1. All cryptocurrency token symbols mentioned (e.g., BTC, ETH, SOL, USDT)
-            2. Include symbols with $ prefix (e.g., $BTC, $ETH)
-            3. Include full names that can be mapped to symbols (e.g., "Bitcoin" -> BTC, "Ethereum" -> ETH)
+Please identify:
+1. All cryptocurrency token symbols mentioned (e.g., BTC, ETH, SOL, USDT)
+2. Include symbols with $ prefix (e.g., $BTC, $ETH)
+3. Include full names that can be mapped to symbols (e.g., "Bitcoin" -> BTC, "Ethereum" -> ETH)
 
-            Requirements:
-            - Only extract valid cryptocurrency token symbols (2-10 uppercase letters)
-            - Exclude common words that look like symbols but are not (e.g., "TO", "FOR", "AND")
-            - Return empty list if no valid symbols found
-            - Return at most 10 symbols
+Requirements:
+- Only extract valid cryptocurrency token symbols (2-10 uppercase letters)
+- Exclude common words that look like symbols but are not (e.g., "TO", "FOR", "AND")
+- Return empty list if no valid symbols found
+- Return at most 10 symbols
 
-            Please return in JSON format:
-            {{"symbols": ["BTC", "ETH", "SOL"]}}
+Please return in JSON format:
+{{"symbols": ["BTC", "ETH", "SOL"]}}
 
-            If no valid symbols found, return:
-            {{"symbols": []}}
-            """
+If no valid symbols found, return:
+{{"symbols": []}}
+"""
 
             messages = [
-                {"role": "system", "content": "You are a professional cryptocurrency analyst skilled in identifying token symbols from social media content."},
+                {"role": "system", "content": "You are a professional cryptocurrency analyst. Reply ONLY with valid JSON, nothing else."},
                 {"role": "user", "content": prompt}
             ]
 
             response = self._make_request(
                 messages=messages,
-                temperature=0.1,  # 低温度以获得更确定的结果
-                max_tokens=150
+                temperature=0.0,
+                max_tokens=200
             )
 
             if response:
                 try:
+                    # 清理Qwen3可能返回的<think>标签
+                    import re
+                    cleaned_response = re.sub(r'<think>.*?</think>', '', response, flags=re.DOTALL)
+                    cleaned_response = re.sub(r'</?think>', '', cleaned_response)  # 移除未闭合的标签
+
                     # 清理响应内容，移除代码块标记
-                    cleaned_response = response.strip()
+                    cleaned_response = cleaned_response.strip()
                     if cleaned_response.startswith('```json'):
                         cleaned_response = cleaned_response[7:]  # 移除 ```json
                     if cleaned_response.startswith('```'):

@@ -97,14 +97,14 @@ class SmartClassifier:
     def _ai_classify_content(self, text: str) -> Optional[Dict[str, Any]]:
         """
         使用AI分析推文内容，判断是项目还是话题
-        
+
         Args:
             text: 推文内容
-            
+
         Returns:
             分类结果字典
         """
-        prompt = f"""
+        prompt = f"""/no_think
 你是一个专业的加密货币内容分析师。请分析以下推文内容，判断它主要讨论的是：
 1. 具体的加密货币项目/代币（如Bitcoin、Ethereum、Solana等具体项目）
 2. 一般性的话题讨论（如DeFi、NFT、技术分析、市场动态等概念性话题）
@@ -126,7 +126,7 @@ class SmartClassifier:
 
 ## 常见项目名称识别
 - Bitcoin/BTC → Bitcoin项目
-- Ethereum/ETH → Ethereum项目  
+- Ethereum/ETH → Ethereum项目
 - Solana/SOL → Solana项目
 - Cardano/ADA → Cardano项目
 - Polygon/MATIC → Polygon项目
@@ -149,34 +149,39 @@ class SmartClassifier:
 - 话题名称应简洁明了（如DeFi、NFT、技术分析等）
 - 如果无法明确判断，返回"unknown"
 """
-        
+
         try:
             # 使用正确的方法调用ChatGPT API
             messages = [
-                {"role": "system", "content": "你是一个专业的加密货币内容分析师，擅长识别推文中讨论的项目和话题。"},
+                {"role": "system", "content": "你是一个专业的加密货币内容分析师。Reply ONLY with valid JSON, nothing else."},
                 {"role": "user", "content": prompt}
             ]
-            
-            response = chatgpt_client._make_request(messages, temperature=0.1, max_tokens=300)
-            
+
+            response = chatgpt_client._make_request(messages, temperature=0.0, max_tokens=350)
+
             if not response:
                 self.logger.warning("ChatGPT API返回空响应")
                 return None
-            
+
+            # 清理Qwen3可能返回的<think>标签
+            import re
+            cleaned_response = re.sub(r'<think>.*?</think>', '', response, flags=re.DOTALL)
+            cleaned_response = re.sub(r'</?think>', '', cleaned_response)  # 移除未闭合的标签
+
             # 提取JSON部分
-            json_start = response.find('{')
-            json_end = response.rfind('}') + 1
+            json_start = cleaned_response.find('{')
+            json_end = cleaned_response.rfind('}') + 1
             if json_start >= 0 and json_end > json_start:
-                json_str = response[json_start:json_end]
+                json_str = cleaned_response[json_start:json_end]
                 result = json.loads(json_str)
-                
+
                 # 验证返回格式
                 if result.get('type') in ['project', 'topic', 'unknown'] and result.get('name'):
                     return result
-            
-            self.logger.warning(f"AI分类返回格式无效: {response}")
+
+            self.logger.warning(f"AI分类返回格式无效: {cleaned_response[:200]}")
             return None
-            
+
         except Exception as e:
             self.logger.error(f"AI分类失败: {e}")
             return None
