@@ -838,9 +838,39 @@ class KOLFollowingsFetcher:
         self.logger.info("=" * 60)
 
 
+def load_api_key_from_config() -> str:
+    """
+    从配置文件读取 API key
+
+    Returns:
+        API key，如果读取失败则返回占位符
+    """
+    try:
+        # 配置文件位于项目根目录的 config/config.json
+        config_path = project_root / "config" / "config.json"
+
+        if not config_path.exists():
+            return 'YOUR_TWITTERAPI_IO_KEY'
+
+        with open(config_path, 'r', encoding='utf-8') as f:
+            config = json.load(f)
+
+        # 从 api_twitterapi.headers.X-API-Key 读取
+        api_key = config.get('api_twitterapi', {}).get('headers', {}).get('X-API-Key', 'YOUR_TWITTERAPI_IO_KEY')
+
+        return api_key
+
+    except Exception as e:
+        print(f"警告: 读取配置文件失败: {e}")
+        return 'YOUR_TWITTERAPI_IO_KEY'
+
+
 def main():
     """主函数"""
     import argparse
+
+    # 从配置文件加载 API key
+    default_api_key = load_api_key_from_config()
 
     parser = argparse.ArgumentParser(
         description='获取KOL关注列表并入库（带缓存和断点续传）',
@@ -886,8 +916,8 @@ def main():
     parser.add_argument('--sleep', type=float, default=0.5,
                         help='API调用间隔秒数（默认: 0.5秒，设为0表示无间隔）')
     parser.add_argument('--api-key', type=str,
-                        default='YOUR_TWITTERAPI_IO_KEY',
-                        help='Twitter API密钥')
+                        default=default_api_key,
+                        help='Twitter API密钥（默认从配置文件读取）')
 
     args = parser.parse_args()
 

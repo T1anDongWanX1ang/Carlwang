@@ -5,6 +5,18 @@
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 LOG_FILE="$SCRIPT_DIR/service_kol_following.log"
+LOG_FILE_CRAWLER="$SCRIPT_DIR/logs/twitter_crawler.log"
+
+# 合并两个日志文件用于统计
+COMBINED_LOG=$(mktemp)
+trap "rm -f $COMBINED_LOG" EXIT
+
+# 合并日志文件（如果存在）
+[ -f "$LOG_FILE" ] && cat "$LOG_FILE" >> "$COMBINED_LOG"
+[ -f "$LOG_FILE_CRAWLER" ] && cat "$LOG_FILE_CRAWLER" >> "$COMBINED_LOG"
+
+# 使用合并后的日志进行统计
+LOG_FILE="$COMBINED_LOG"
 
 # 颜色输出
 RED='\033[0;31m'
@@ -21,8 +33,12 @@ echo -e "${CYAN}📊 KOL Following 爬取服务 - 成本统计${NC}"
 echo "=================================================="
 echo ""
 
-if [ ! -f "$LOG_FILE" ]; then
-    echo -e "${RED}❌ 日志文件不存在: $LOG_FILE${NC}"
+# 检查日志文件（已合并，总是存在）
+if [ ! -s "$COMBINED_LOG" ]; then
+    echo -e "${RED}❌ 没有找到日志数据${NC}"
+    echo -e "${YELLOW}日志文件位置:${NC}"
+    echo "  - $SCRIPT_DIR/service_kol_following.log"
+    echo "  - $SCRIPT_DIR/logs/twitter_crawler.log"
     exit 1
 fi
 
@@ -35,10 +51,10 @@ FAILED_RUNS=$(grep -c "KOL Following 爬取失败" "$LOG_FILE" 2>/dev/null || ec
 API_CALLS=$(grep "API调用次数:" "$LOG_FILE" 2>/dev/null | awk '{sum+=$NF} END {print sum+0}')
 CACHE_HITS=$(grep -c "缓存命中" "$LOG_FILE" 2>/dev/null || echo "0")
 
-# KOL 处理统计
-TOTAL_KOLS_PROCESSED=$(grep "已处理:" "$LOG_FILE" 2>/dev/null | awk '{sum+=$NF} END {print sum+0}')
-SUCCESS_KOLS=$(grep "成功:" "$LOG_FILE" 2>/dev/null | awk '{sum+=$NF} END {print sum+0}')
-FAILED_KOLS=$(grep "失败:" "$LOG_FILE" 2>/dev/null | awk '{sum+=$NF} END {print sum+0}')
+# KOL 处理统计（只统计摘要中的数据，避免误统计错误日志）
+TOTAL_KOLS_PROCESSED=$(grep "已处理:" "$LOG_FILE" 2>/dev/null | grep -o "[0-9]\+$" | awk '{sum+=$1} END {print sum+0}')
+SUCCESS_KOLS=$(grep "成功:" "$LOG_FILE" 2>/dev/null | grep -v "跳过" | grep -o "[0-9]\+$" | awk '{sum+=$1} END {print sum+0}')
+FAILED_KOLS=$(grep "_show_statistics.*失败:" "$LOG_FILE" 2>/dev/null | grep -o "[0-9]\+$" | awk '{sum+=$1} END {print sum+0}')
 
 # Following 数据统计
 TOTAL_FOLLOWINGS=$(grep "总关注用户数:" "$LOG_FILE" 2>/dev/null | awk '{sum+=$NF} END {print sum+0}')
