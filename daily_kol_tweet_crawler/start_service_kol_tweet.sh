@@ -16,8 +16,8 @@ EXPECTED_MODE="--mode schedule"
 
 # 默认配置
 DEFAULT_INTERVAL=60
-DEFAULT_MAX_PAGES=50
-DEFAULT_PAGE_SIZE=100
+DEFAULT_MAX_PAGES=30   # 降低到30页（有智能早停机制，足够了）
+DEFAULT_PAGE_SIZE=20   # API实际每页返回20条
 DEFAULT_HOURS_LIMIT=1.5  # 智能时间检测：默认拉取过去1.5小时数据（优化成本，保留0.5小时安全冗余）
 
 # 颜色输出
@@ -128,7 +128,7 @@ start_service() {
     find "$PROJECT_ROOT" -name "*.pyc" -delete 2>/dev/null
 
     print_info "启动KOL推文爬取服务..."
-    print_info "配置: 间隔=${interval}分钟, 页数=${max_pages}（最多15页）, 每页=${page_size}条（实际由API决定）"
+    print_info "配置: 间隔=${interval}分钟, 页数=${max_pages}（最多15页，有智能早停）, 每页=${page_size}条（API实际返回20条）"
     print_info "智能时间检测: 拉取过去${hours_limit}小时数据，支持UTC时间转换，自动优化停止时机"
 
     # 创建日志目录
@@ -271,7 +271,7 @@ run_once() {
     local hours_limit=${3:-$DEFAULT_HOURS_LIMIT}
 
     print_info "开始执行单次KOL推文数据爬取..."
-    print_info "配置: 页数=${max_pages}（最多15页）, 每页=${page_size}条（实际由API决定）"
+    print_info "配置: 页数=${max_pages}（最多15页，有智能早停）, 每页=${page_size}条（API实际返回20条）"
     print_info "智能时间检测: 拉取过去${hours_limit}小时数据，支持UTC时间转换，自动优化停止时机"
 
     # 创建日志目录
@@ -326,11 +326,11 @@ show_help() {
     echo "  $0 [命令] [参数]"
     echo ""
     echo "命令:"
-    echo "  start [间隔] [页数] [每页条数] [小时限制]  启动服务 (默认: 60分钟, 50页, 100条, 3小时)"
+    echo "  start [间隔] [页数] [每页条数] [小时限制]  启动服务 (默认: 60分钟, 30页, 20条, 1.5小时)"
     echo "  stop                                   停止服务"
     echo "  restart [间隔] [页数] [每页条数] [小时限制] 重启服务"
     echo "  status                                 查看服务状态"
-    echo "  once [页数] [每页条数] [小时限制]         执行单次爬取 (默认: 50页, 100条, 3小时)"
+    echo "  once [页数] [每页条数] [小时限制]         执行单次爬取 (默认: 30页, 20条, 1.5小时)"
     echo "  logs [行数]                            查看日志 (默认50行)"
     echo "  monitor                                查看监控状态和日志"
     echo "  help                                   显示帮助"
@@ -338,9 +338,9 @@ show_help() {
     echo "示例:"
     echo "  $0 start                    # 使用默认配置启动"
     echo "  $0 start 10                 # 10分钟间隔启动"
-    echo "  $0 start 60 50 100 24       # 60分钟间隔，50页，每页100条，24小时时间限制"
+    echo "  $0 start 60 30 20 1.5       # 60分钟间隔，30页，每页20条，1.5小时时间限制"
     echo "  $0 once                     # 执行单次爬取"
-    echo "  $0 once 50 100 12           # 单次爬取50页，每页100条，12小时时间限制"
+    echo "  $0 once 30 20 3             # 单次爬取30页，每页20条，3小时时间限制"
     echo "  $0 logs 100                 # 查看最新100行日志"
     echo "  $0 monitor                  # 查看监控状态"
     echo ""

@@ -361,7 +361,8 @@ class TwitterAPITwitterAPIClient:
         if max_pages is None:
             max_pages = 15
         else:
-            max_pages = min(max_pages, 15)
+            # 回填模式允许更多页数（最多500页）
+            max_pages = min(max_pages, 500)
 
         if page_size is None:
             page_size = self.pagination_config.get('page_size', 100)

@@ -1,0 +1,14 @@
+backfill_cmc300_tweets/
+├── backfill_project_tweets.py   # 主回填脚本（Python）
+├── start_backfill.sh             # 启动脚本（支持各种参数）
+├── quick_backfill_dec22_28.sh   # 快速回填脚本（一键补充12月22-28日数据）
+├── README.md                     # 详细使用文档
+├── QUICKSTART.md                 # 快速开始指南
+└── .file_structure.txt           # 本文件
+
+功能说明：
+- 使用专用数据表: twitter_tweet_back_test_cmc300
+- 支持按天数或日期范围回填
+- 自动使用配置文件中的 list_ids_project
+- 智能时间过滤，避免重复数据
+- 详细的进度显示和API成本统计
