@@ -43,13 +43,17 @@ if [ ! -s "$COMBINED_LOG" ]; then
 fi
 
 # 统计数据
-TOTAL_RUNS=$(grep -c "开始执行 KOL Following 爬取" "$LOG_FILE" 2>/dev/null || echo "0")
-SUCCESS_RUNS=$(grep -c "KOL Following 爬取完成" "$LOG_FILE" 2>/dev/null || echo "0")
-FAILED_RUNS=$(grep -c "KOL Following 爬取失败" "$LOG_FILE" 2>/dev/null || echo "0")
+TOTAL_RUNS=$(grep -c "开始执行 KOL Following 爬取" "$LOG_FILE" 2>/dev/null || true)
+TOTAL_RUNS=${TOTAL_RUNS:-0}
+SUCCESS_RUNS=$(grep -c "KOL Following 爬取完成" "$LOG_FILE" 2>/dev/null || true)
+SUCCESS_RUNS=${SUCCESS_RUNS:-0}
+FAILED_RUNS=$(grep -c "KOL Following 爬取失败" "$LOG_FILE" 2>/dev/null || true)
+FAILED_RUNS=${FAILED_RUNS:-0}
 
 # API 调用统计（使用 $NF 提取最后一个字段，即数字）
 API_CALLS=$(grep "API调用次数:" "$LOG_FILE" 2>/dev/null | awk '{sum+=$NF} END {print sum+0}')
-CACHE_HITS=$(grep -c "缓存命中" "$LOG_FILE" 2>/dev/null || echo "0")
+CACHE_HITS=$(grep -c "缓存命中" "$LOG_FILE" 2>/dev/null || true)
+CACHE_HITS=${CACHE_HITS:-0}
 
 # KOL 处理统计（只统计摘要中的数据，避免误统计错误日志）
 TOTAL_KOLS_PROCESSED=$(grep "已处理:" "$LOG_FILE" 2>/dev/null | grep -o "[0-9]\+$" | awk '{sum+=$1} END {print sum+0}')
@@ -162,6 +166,38 @@ fi
 if [ -n "$LAST_END" ]; then
     echo -e "${GREEN}最近结束状态:${NC}"
     echo "  $LAST_END"
+fi
+
+echo ""
+echo "=================================================="
+
+# 记录到数据库
+echo -e "${CYAN}📝 正在记录成本数据到数据库...${NC}"
+
+# 获取当前运行ID
+RUN_ID=$(date +%Y%m%d_%H%M%S)
+
+# 调用 Python 脚本记录到数据库
+PYTHON_LOGGER="$SCRIPT_DIR/../src/utils/cost_db_logger.py"
+if [ -f "$PYTHON_LOGGER" ]; then
+    cd "$SCRIPT_DIR/.." && venv/bin/python "$PYTHON_LOGGER" \
+        --task-name "kol_following" \
+        --run-id "$RUN_ID" \
+        --total-requests "$API_CALLS" \
+        --total-cost "$TOTAL_COST" \
+        --tweets-fetched "$INSERTED_FOLLOWINGS" \
+        --error-count "$FAILED_KOLS" \
+        --success-kols "$SUCCESS_KOLS" \
+        --total-kols "$TOTAL_KOLS_PROCESSED" \
+        --cache-hits "$CACHE_HITS" 2>&1
+
+    if [ $? -eq 0 ]; then
+        echo -e "${GREEN}✓ 成本数据已记录到数据库 tp_alarm.api_cost_tracking${NC}"
+    else
+        echo -e "${YELLOW}⚠ 记录到数据库失败（不影响统计显示）${NC}"
+    fi
+else
+    echo -e "${YELLOW}⚠ 未找到数据库记录器: $PYTHON_LOGGER${NC}"
 fi
 
 echo ""

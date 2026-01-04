@@ -185,25 +185,57 @@ def run_scheduled(args):
     def crawl_task():
         """定时爬取任务（包含项目分析）"""
         logger.info("执行定时爬取任务...")
-        
+
+        # 重置API统计信息（避免累计）
+        crawler.api_client.reset_stats()
+
         # 执行爬取（直接使用配置文件中的list_ids进行并行获取，使用智能时间检测）
         crawl_success = crawler.crawl_tweets(
             max_pages=args.max_pages,
             page_size=args.page_size,
             hours_limit=args.hours_limit
         )
-        
+
+        # 自动记录成本数据到数据库
+        try:
+            import subprocess
+            from datetime import datetime
+            import os
+
+            # 获取API统计数据
+            api_stats = crawler.api_client.get_request_stats()
+
+            run_id = datetime.now().strftime("%Y%m%d_%H%M%S")
+            script_dir = os.path.dirname(os.path.abspath(__file__))
+            logger_path = os.path.join(script_dir, 'src', 'utils', 'cost_db_logger.py')
+            venv_python = os.path.join(script_dir, 'venv', 'bin', 'python')
+
+            if os.path.exists(logger_path) and os.path.exists(venv_python):
+                cmd = [
+                    venv_python, logger_path,
+                    '--task-name', 'kol_tweet',
+                    '--run-id', run_id,
+                    '--total-requests', str(api_stats.get('total_requests', 0)),
+                    '--total-cost', f"{api_stats.get('total_cost_usd', 0):.6f}",
+                    '--tweets-fetched', str(api_stats.get('tweets_fetched', 0)),
+                    '--error-count', str(api_stats.get('error_count', 0))
+                ]
+                subprocess.run(cmd, cwd=script_dir, capture_output=True, text=True)
+                logger.info("✓ 成本数据已自动记录到数据库")
+        except Exception as e:
+            logger.warning(f"记录成本数据失败（不影响主流程）: {e}")
+
         if crawl_success:
             logger.info("爬取完成，开始项目分析...")
             # 执行项目分析（限制推文数量以提高速度）
             max_tweets = min(50, (args.max_pages or 3) * (args.page_size or 100))
             project_success = project_engine.analyze_recent_tweets(hours=24, max_tweets=max_tweets)
-            
+
             if project_success:
                 logger.info("项目分析完成")
             else:
                 logger.warning("项目分析失败")
-        
+
         return crawl_success
     
     # 设置调度器

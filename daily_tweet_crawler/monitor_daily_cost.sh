@@ -25,6 +25,7 @@ echo ""
 
 # 1. 统计总运行次数
 TOTAL_RUNS=$(grep "开始爬取项目推文数据" "$LOG_FILE" | wc -l | tr -d ' ')
+TOTAL_RUNS=${TOTAL_RUNS:-0}
 echo -e "${GREEN}总运行次数:${NC} $TOTAL_RUNS 次"
 
 # 2. 统计总成本（取最后一次的累计值，因为日志中"本次总成本"本身就是累计的）
@@ -96,6 +97,43 @@ if [ "$TOTAL_RUNS" -gt 0 ] && [ "$TOTAL_COST" != "0.000000" ]; then
             echo -e "${YELLOW}预估月成本:${NC} \$$MONTHLY_ESTIMATE USD (按每15分钟运行)"
         fi
     fi
+fi
+
+echo ""
+echo "=================================================="
+
+# 记录到数据库
+echo -e "${CYAN}📝 正在记录成本数据到数据库...${NC}"
+
+# 获取当前运行ID
+RUN_ID=$(date +%Y%m%d_%H%M%S)
+
+# 调用 Python 脚本记录到数据库
+PYTHON_LOGGER="$SCRIPT_DIR/../src/utils/cost_db_logger.py"
+if [ -f "$PYTHON_LOGGER" ]; then
+    # 计算 API 请求次数（根据推文数和页大小估算）
+    # 假设每页100条推文，每次请求一页
+    if [ "$TOTAL_TWEETS" -gt 0 ]; then
+        ESTIMATED_REQUESTS=$(echo "scale=0; ($TOTAL_TWEETS + 99) / 100" | bc 2>/dev/null || echo "0")
+    else
+        ESTIMATED_REQUESTS=0
+    fi
+
+    cd "$SCRIPT_DIR/.." && venv/bin/python "$PYTHON_LOGGER" \
+        --task-name "project_tweet" \
+        --run-id "$RUN_ID" \
+        --total-requests "$ESTIMATED_REQUESTS" \
+        --total-cost "$TOTAL_COST" \
+        --tweets-fetched "$TOTAL_TWEETS" \
+        --error-count "0" 2>&1
+
+    if [ $? -eq 0 ]; then
+        echo -e "${GREEN}✓ 成本数据已记录到数据库 tp_alarm.api_cost_tracking${NC}"
+    else
+        echo -e "${YELLOW}⚠ 记录到数据库失败（不影响统计显示）${NC}"
+    fi
+else
+    echo -e "${YELLOW}⚠ 未找到数据库记录器: $PYTHON_LOGGER${NC}"
 fi
 
 echo ""

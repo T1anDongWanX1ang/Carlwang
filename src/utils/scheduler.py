@@ -51,25 +51,35 @@ class TaskScheduler:
         self.task_function = task_function
         self.logger.info(f"任务函数已设置: {task_function.__name__}")
     
-    def start(self) -> None:
-        """启动调度器"""
+    def start(self, run_immediately: bool = True) -> None:
+        """
+        启动调度器
+
+        Args:
+            run_immediately: 是否立即执行一次任务（默认True）
+        """
         if self.is_running:
             self.logger.warning("调度器已经在运行中")
             return
-        
+
         if not self.task_function:
             raise ValueError("必须先设置任务函数才能启动调度器")
-        
+
         self.is_running = True
         self.is_stopped = False
-        
+
+        # 如果需要立即执行，先执行一次任务
+        if run_immediately:
+            self.logger.info("启动后立即执行第一次任务...")
+            self._execute_task()
+
         # 计算下次运行时间
         self.next_run_time = datetime.now() + timedelta(minutes=self.interval_minutes)
-        
+
         # 启动调度器线程
         self.scheduler_thread = threading.Thread(target=self._scheduler_loop, daemon=True)
         self.scheduler_thread.start()
-        
+
         self.logger.info(f"调度器已启动，间隔 {self.interval_minutes} 分钟")
         self.logger.info(f"下次运行时间: {self.next_run_time.strftime('%Y-%m-%d %H:%M:%S')}")
     
@@ -237,13 +247,18 @@ class CrawlerScheduler(TaskScheduler):
         self.set_task(crawler_function)
         self.logger.info("爬虫函数已设置")
     
-    def start_crawling(self) -> None:
-        """开始定时爬取"""
+    def start_crawling(self, run_immediately: bool = True) -> None:
+        """
+        开始定时爬取
+
+        Args:
+            run_immediately: 是否立即执行一次爬取（默认True）
+        """
         if not self.crawler_function:
             raise ValueError("必须先设置爬虫函数")
-        
+
         self.logger.info("开始定时爬取Twitter数据...")
-        self.start()
+        self.start(run_immediately=run_immediately)
     
     def run_crawler_once(self) -> bool:
         """立即执行一次爬取"""

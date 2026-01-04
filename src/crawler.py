@@ -725,19 +725,22 @@ class TwitterCrawler:
     def crawl_project_tweets(self, max_pages: int = None, page_size: int = None, hours_limit: int = 2) -> bool:
         """
         爬取项目推文数据（简化流程版本）
-        
+
         Args:
             max_pages: 最大页数（不超过15页）
             page_size: 每页大小
             hours_limit: 时间限制（小时），只拉取过去N小时的推文，默认2小时
-            
+
         Returns:
             是否成功
         """
         self.crawl_count += 1
         self.last_crawl_time = datetime.now()
-        
+
         try:
+            # 重置API统计信息（避免累计）
+            self.api_client.reset_stats()
+
             self.logger.info(f"开始爬取项目推文数据 (第 {self.crawl_count} 次，时间限制: {hours_limit}小时)")
             
             # 1. 从API获取数据（使用配置中的list_ids_project）
@@ -798,7 +801,7 @@ class TwitterCrawler:
             
             # 保存项目推文数据（使用普通推文的入库逻辑）
             tweet_saved_count = self._save_tweets_to_database(enriched_tweets)
-            
+
             # 4. 数据保存完成
             if tweet_saved_count > 0:
                 self.logger.info(f"成功保存 {tweet_saved_count} 条项目推文到数据库")
@@ -823,6 +826,34 @@ class TwitterCrawler:
                 self.logger.info(f"平均每次请求成本: ${api_stats.get('avg_cost_per_request', 0):.6f} USD")
                 self.logger.info(f"每条推文平均成本: ${api_stats.get('total_cost_usd', 0) / max(api_stats.get('tweets_fetched', 1), 1):.6f} USD")
                 self.logger.info("=" * 50)
+
+                # 自动记录成本数据到数据库
+                try:
+                    import subprocess
+                    from datetime import datetime
+                    import os
+
+                    run_id = datetime.now().strftime("%Y%m%d_%H%M%S")
+                    # 获取项目根目录（当前文件在 src/crawler.py）
+                    current_dir = os.path.dirname(os.path.abspath(__file__))
+                    project_root = os.path.dirname(current_dir)
+                    logger_path = os.path.join(project_root, 'src', 'utils', 'cost_db_logger.py')
+                    venv_python = os.path.join(project_root, 'venv', 'bin', 'python')
+
+                    if os.path.exists(logger_path) and os.path.exists(venv_python):
+                        cmd = [
+                            venv_python, logger_path,
+                            '--task-name', 'project_tweet',
+                            '--run-id', run_id,
+                            '--total-requests', str(api_stats.get('total_requests', 0)),
+                            '--total-cost', f"{api_stats.get('total_cost_usd', 0):.6f}",
+                            '--tweets-fetched', str(api_stats.get('tweets_fetched', 0)),
+                            '--error-count', str(api_stats.get('error_count', 0))
+                        ]
+                        subprocess.run(cmd, cwd=project_root, capture_output=True, text=True)
+                        self.logger.info("✓ 成本数据已自动记录到数据库")
+                except Exception as e:
+                    self.logger.warning(f"记录成本数据失败（不影响主流程）: {e}")
 
                 return True
             else:

@@ -54,7 +54,7 @@ class DatabaseConnectionPool:
     def _create_connection(self) -> Connection:
         """
         创建新的数据库连接
-        
+
         Returns:
             数据库连接对象
         """
@@ -69,18 +69,19 @@ class DatabaseConnectionPool:
                 'connect_timeout': self.connection_timeout,
                 'autocommit': False,
             }
-            
+
             # 添加额外选项
             options = self.db_config.get('options', {})
             if options.get('useSSL') is False:
                 connection_params['ssl_disabled'] = True
-            
+
             conn = pymysql.connect(**connection_params)
-            self.logger.info("创建新的数据库连接成功")
+            self.logger.info(f"创建新的数据库连接成功 (host: {self.db_config['host']}:{self.db_config['port']})")
             return conn
-            
+
         except Exception as e:
-            self.logger.error(f"创建数据库连接失败: {e}")
+            error_msg = str(e) if str(e) else repr(e)
+            self.logger.error(f"创建数据库连接失败 (host: {self.db_config['host']}:{self.db_config['port']}): {type(e).__name__}: {error_msg}")
             raise
     
     def get_connection(self) -> Connection:
@@ -152,17 +153,19 @@ class DatabaseConnectionPool:
     def _is_connection_valid(self, conn: Connection) -> bool:
         """
         检查连接是否有效
-        
+
         Args:
             conn: 数据库连接对象
-            
+
         Returns:
             连接是否有效
         """
         try:
             conn.ping(reconnect=False)
             return True
-        except:
+        except Exception as e:
+            error_msg = str(e) if str(e) else repr(e)
+            self.logger.warning(f"连接失效检测: {type(e).__name__}: {error_msg}")
             return False
     
     def close_all(self):
@@ -223,11 +226,11 @@ class DatabaseManager:
     def execute_query(self, sql: str, params: Optional[tuple] = None) -> List[Dict[str, Any]]:
         """
         执行查询SQL
-        
+
         Args:
             sql: SQL语句
             params: 参数
-            
+
         Returns:
             查询结果列表
         """
@@ -236,17 +239,18 @@ class DatabaseManager:
                 cursor.execute(sql, params)
                 return cursor.fetchall()
         except Exception as e:
-            self.logger.error(f"执行查询失败: {sql}, 参数: {params}, 错误: {e}")
+            error_msg = str(e) if str(e) else repr(e)
+            self.logger.error(f"执行查询失败: {sql}, 参数: {params}, 错误类型: {type(e).__name__}, 错误: {error_msg}")
             raise
     
     def execute_update(self, sql: str, params: Optional[tuple] = None) -> int:
         """
         执行更新SQL
-        
+
         Args:
             sql: SQL语句
             params: 参数
-            
+
         Returns:
             影响的行数
         """
@@ -256,23 +260,24 @@ class DatabaseManager:
                 conn.commit()
                 return affected_rows
         except Exception as e:
-            self.logger.error(f"执行更新失败: {sql}, 参数: {params}, 错误: {e}")
+            error_msg = str(e) if str(e) else repr(e)
+            self.logger.error(f"执行更新失败: {sql}, 参数: {params}, 错误类型: {type(e).__name__}, 错误: {error_msg}")
             raise
     
     def execute_batch_update(self, sql: str, params_list: List[tuple]) -> int:
         """
         执行批量更新SQL
-        
+
         Args:
             sql: SQL语句
             params_list: 参数列表
-            
+
         Returns:
             总影响的行数
         """
         if not params_list:
             return 0
-            
+
         try:
             with self.get_cursor() as (conn, cursor):
                 total_affected = 0
@@ -282,7 +287,8 @@ class DatabaseManager:
                 conn.commit()
                 return total_affected
         except Exception as e:
-            self.logger.error(f"执行批量更新失败: {sql}, 错误: {e}")
+            error_msg = str(e) if str(e) else repr(e)
+            self.logger.error(f"执行批量更新失败: {sql}, 错误类型: {type(e).__name__}, 错误: {error_msg}")
             raise
     
     def test_connection(self) -> bool:

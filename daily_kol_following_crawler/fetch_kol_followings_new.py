@@ -8,10 +8,13 @@ API Key: YOUR_TWITTERAPI_IO_KEY
 
 带缓存和断点续传功能，防止API重复调用浪费费用
 
-分层爬取策略（重要！节省80%+成本）：
-- following < 1000: 采集 200 条（1页）
-- 1000 ≤ following ≤ 2000: 采集 300 条（2页）
-- following > 2000: 跳过（质量不高，成本过高）
+分层爬取策略（已停用，当前统一上限 2000）：
+- 当前配置：采集所有 KOL 的关注，最多 2000 条（统一上限）
+
+注释掉的分层策略（需要时可恢复）：
+# - following ≤ 500: 采集全部
+# - following > 500: 采集 500 条
+# - following > 2000: 跳过（质量不高，成本过高）
 
 使用方法：
     # 测试模式（只处理前3个KOL，不调用API，不入库）
@@ -70,8 +73,14 @@ class KOLFollowingsFetcher:
         self.api_key = api_key
         self.api_base_url = "https://api.twitterapi.io/twitter/user/followings"
 
-        # 缓存配置
-        self.cache_dir = Path(cache_dir)
+        # 缓存配置 - 使用绝对路径，确保在脚本所在目录下
+        # 修复：避免因工作目录不同导致使用错误的缓存位置
+        script_dir = Path(__file__).parent
+        if not Path(cache_dir).is_absolute():
+            # 如果是相对路径，转换为脚本所在目录的绝对路径
+            self.cache_dir = script_dir / cache_dir
+        else:
+            self.cache_dir = Path(cache_dir)
         self.cache_dir.mkdir(exist_ok=True)
         self.progress_file = self.cache_dir / "progress.json"
 
@@ -109,6 +118,17 @@ class KOLFollowingsFetcher:
             是否成功
         """
         try:
+            # 重置本次运行的统计信息
+            self.processed_kols = 0
+            self.success_kols = 0
+            self.failed_kols = 0
+            self.skipped_kols = 0
+            self.total_followings = 0
+            self.inserted_followings = 0
+            self.skipped_followings = 0
+            self.api_calls = 0
+            self.cache_hits = 0
+
             self.logger.info("=" * 60)
             self.logger.info("开始获取KOL关注列表")
             if test_mode:
@@ -159,25 +179,32 @@ class KOLFollowingsFetcher:
                 user_name = kol.get('user_name')
                 following_count = kol.get('following', 0)  # 获取 KOL 的 following 数量
 
-                # 🎯 分层爬取策略
-                # < 1000: 采集 200 条（1页）
-                # 1000-2000: 采集 300 条（2页）
+                # 🎯 分层爬取策略（已停用）
+                # 需要恢复时，取消下面注释，并注释掉"直接爬取全部"部分
+                # ≤ 500: 采集全部
+                # > 500: 采集 500 条
                 # > 2000: 跳过（质量不高，成本过高）
-                if following_count > 2000:
-                    self.logger.info(f"\n[{idx}/{len(kols)}] ⏭️  跳过 {user_name} (following: {following_count:,} > 2000)")
-                    self.processed_kols += 1
-                    self.skipped_kols += 1
-                    # 标记为已完成，避免下次重复处理
-                    self._mark_completed(user_name)
-                    continue
+                # if following_count > 2000:
+                #     self.logger.info(f"\n[{idx}/{len(kols)}] ⏭️  跳过 {user_name} (following: {following_count:,} > 2000)")
+                #     self.processed_kols += 1
+                #     self.skipped_kols += 1
+                #     # 标记为已完成，避免下次重复处理
+                #     self._mark_completed(user_name)
+                #     continue
+                #
+                # # 确定获取上限
+                # if following_count <= 500:
+                #     max_followings = None  # 采集全部
+                #     display_limit = "全部"
+                # else:  # 500 < following ≤ 2000
+                #     max_followings = 500
+                #     display_limit = "500"
 
-                # 确定获取上限
-                if following_count < 1000:
-                    max_followings = 200  # 1页
-                else:  # 1000-2000
-                    max_followings = 300  # 2页
+                # ✅ 直接爬取（当前启用，统一上限2000）
+                max_followings = 2000  # 上限2000条，防止超量
+                display_limit = "2000"
 
-                self.logger.info(f"\n[{idx}/{len(kols)}] 处理 {user_name} (关注 {following_count:,} 人，获取 {max_followings} 条)")
+                self.logger.info(f"\n[{idx}/{len(kols)}] 处理 {user_name} (关注 {following_count:,} 人，获取 {display_limit} 条)")
 
                 try:
                     if test_mode:
@@ -456,19 +483,26 @@ class KOLFollowingsFetcher:
     def _get_max_followings_limit(self, kol_following_count: int) -> int:
         """
         根据KOL的关注人数设置分层爬取限制
+        
+        【已停用】分层策略，当前统一返回 2000（上限）
+        需要恢复分层策略时，取消下面注释
 
         Args:
             kol_following_count: KOL关注的用户总数
 
         Returns:
-            最大爬取数量
+            最大爬取数量（None 表示不限制）
         """
-        if kol_following_count < 1000:
-            return 200  # 关注数小于1000，获取200条（1页）
-        elif kol_following_count <= 2000:
-            return 300  # 关注数在1000-2000之间，获取300条（2页）
-        else:
-            return 0  # 关注数大于2000，跳过（应该在调用前已被过滤）
+        # ✅ 直接爬取（当前启用，统一上限2000）
+        return 2000  # 上限2000条
+        
+        # 🎯 分层爬取策略（已注释，需要时恢复）
+        # if kol_following_count <= 500:
+        #     return None  # 采集全部
+        # elif kol_following_count <= 2000:
+        #     return 500  # 采集 500 条
+        # else:
+        #     return 0  # 关注数大于2000，跳过（应该在调用前已被过滤）
 
     def _fetch_followings(self, user_name: str, page_size: int = 200, max_followings: int = None, kol_following_count: int = 0) -> List[Dict[str, Any]]:
         """
@@ -491,13 +525,16 @@ class KOLFollowingsFetcher:
         # 根据KOL的关注人数设置最大爬取数量（分层策略）
         calculated_max = self._get_max_followings_limit(kol_following_count)
 
-        # 如果外部指定了max_followings，取最小值
-        if max_followings:
-            final_max = min(max_followings, calculated_max)
+        # 如果外部指定了max_followings，取最小值（如果 calculated_max 不为 None）
+        if max_followings is not None:
+            if calculated_max is not None:
+                final_max = min(max_followings, calculated_max)
+            else:
+                final_max = max_followings
         else:
             final_max = calculated_max
 
-        self.logger.info(f"  分层爬取策略: KOL关注总数={kol_following_count}, 计算上限={calculated_max}, 最终上限={final_max}")
+        self.logger.info(f"  分层爬取策略: KOL关注总数={kol_following_count}, 计算上限={'不限制' if calculated_max is None else calculated_max}, 最终上限={'不限制' if final_max is None else final_max}")
 
         try:
             while True:
@@ -956,6 +993,43 @@ def main():
         resume_mode=args.resume,
         sleep_interval=args.sleep
     )
+
+    # 自动记录成本数据到数据库（非测试/dry-run模式）
+    if not args.test and not args.dry_run and not args.resume:
+        try:
+            # 计算成本
+            # TwitterAPI following 端点按 User Profiles 计费: $0.18 per 1,000 profiles
+            # 每次API调用返回200个用户资料，成本：0.18 × (200/1000) = $0.036 per request
+            COST_PER_API_CALL = 0.036
+            total_cost_usd = fetcher.api_calls * COST_PER_API_CALL
+
+            # 调用 cost_db_logger
+            import subprocess
+            from datetime import datetime
+
+            run_id = datetime.now().strftime("%Y%m%d_%H%M%S")
+            script_dir = os.path.dirname(os.path.abspath(__file__))
+            project_root = os.path.dirname(script_dir)
+            logger_path = os.path.join(project_root, 'src', 'utils', 'cost_db_logger.py')
+            venv_python = os.path.join(project_root, 'venv', 'bin', 'python')
+
+            if os.path.exists(logger_path) and os.path.exists(venv_python):
+                cmd = [
+                    venv_python, logger_path,
+                    '--task-name', 'kol_following',
+                    '--run-id', run_id,
+                    '--total-requests', str(fetcher.api_calls),
+                    '--total-cost', f'{total_cost_usd:.6f}',
+                    '--tweets-fetched', str(fetcher.inserted_followings),
+                    '--error-count', str(fetcher.failed_kols),
+                    '--success-kols', str(fetcher.success_kols),
+                    '--total-kols', str(fetcher.processed_kols),
+                    '--cache-hits', str(fetcher.cache_hits)
+                ]
+                subprocess.run(cmd, cwd=project_root, capture_output=True, text=True)
+                logger.info("✓ 成本数据已自动记录到数据库")
+        except Exception as e:
+            logger.warning(f"记录成本数据失败（不影响主流程）: {e}")
 
     if success:
         print("\n✓ 处理完成")
