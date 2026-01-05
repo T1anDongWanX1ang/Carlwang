@@ -85,3 +85,5 @@ backup_*/
 
 # KOL Following Fetcher cache
 .kol_cache/
+# KOL Following cache (new version)
+.kol_cache_new/
