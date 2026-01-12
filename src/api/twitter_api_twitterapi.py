@@ -461,6 +461,63 @@ class TwitterAPITwitterAPIClient:
             self.logger.error(f"获取推文时出错: {e}")
         return all_tweets
 
+    def fetch_tweets_by_ids(self, tweet_ids: List[str]) -> List[Dict[str, Any]]:
+        """
+        根据ID批量获取推文详情
+        
+        Args:
+            tweet_ids: 推文ID列表
+            
+        Returns:
+            推文数据列表
+        """
+        if not tweet_ids:
+            return []
+            
+        all_tweets = []
+        
+        # 批量处理，每次最多100个ID（API限制）
+        batch_size = 100
+        for i in range(0, len(tweet_ids), batch_size):
+            batch_ids = tweet_ids[i:i+batch_size]
+            ids_str = ",".join(batch_ids)
+            
+            endpoint = self.api_config.get('endpoints', {}).get('tweet_lookup', '/twitter/tweets')
+            url = f"{self.base_url.rstrip('/')}/{endpoint.lstrip('/')}"
+            
+            params = {
+                'tweet_ids': ids_str
+            }
+            
+            self.logger.info(f"批量查询推文: {len(batch_ids)} 条 (进度: {i+1}-{min(i+batch_size, len(tweet_ids))}/{len(tweet_ids)})")
+            
+            data = self._make_request(url, params)
+            
+            if data and isinstance(data, dict):
+                tweets = data.get('tweets', data.get('data', []))
+                if not isinstance(tweets, list):
+                    tweets = []
+                
+                # 转换格式
+                converted_tweets = []
+                for tweet in tweets:
+                    converted_tweet = self._convert_twitterapi_format(tweet)
+                    converted_tweets.append(converted_tweet)
+                
+                # 统计成本
+                request_cost = self._calculate_request_cost(len(converted_tweets))
+                self.total_cost += request_cost
+                self.tweets_fetched += len(converted_tweets)
+                
+                self.logger.info(f"获取 {len(converted_tweets)} 条推文详情 | 本次成本: ${request_cost:.6f}")
+                
+                all_tweets.extend(converted_tweets)
+            
+            # 简单的速率限制避免
+            time.sleep(0.5)
+            
+        return all_tweets
+
     def get_request_stats(self) -> Dict[str, float]:
         """获取请求统计信息（包含成本）"""
         return {

@@ -47,7 +47,7 @@
    ```bash
    TWEETSCOUT_API_KEY=678dd1dd-d278-46e9-a6f1-a28dea950469
    OPENAI_API_KEY=sk-svcacct-pqEw9JjDzc0vul6fCMRjhaz...
-   DB_HOST=34.46.218.219
+   DB_HOST=35.209.219.220
    DB_NAME=public_data
    DB_USER=transaction
    DB_PASSWORD=trans_dskke33@72hxcys

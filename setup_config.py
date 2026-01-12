@@ -50,7 +50,7 @@ def setup_config():
     
     # 数据库配置
     print("\n3️⃣ 数据库配置:")
-    db_host = input("请输入数据库主机地址 (默认: 34.46.218.219): ").strip()
+    db_host = input("请输入数据库主机地址 (默认: 35.209.219.220): ").strip()
     if db_host:
         config['database']['host'] = db_host
     

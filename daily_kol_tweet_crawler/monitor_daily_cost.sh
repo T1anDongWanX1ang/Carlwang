@@ -157,33 +157,13 @@ fi
 
 echo ""
 echo "=================================================="
-
-# 记录到数据库
-echo -e "${CYAN}📝 正在记录成本数据到数据库...${NC}"
-
-# 获取当前运行ID
-RUN_ID=$(date +%Y%m%d_%H%M%S)
-
-# 调用 Python 脚本记录到数据库
-PYTHON_LOGGER="$SCRIPT_DIR/../src/utils/cost_db_logger.py"
-if [ -f "$PYTHON_LOGGER" ]; then
-    cd "$SCRIPT_DIR/.." && venv/bin/python "$PYTHON_LOGGER" \
-        --task-name "kol_tweet" \
-        --run-id "$RUN_ID" \
-        --total-requests "$LAST_API_REQUEST" \
-        --total-cost "$TOTAL_COST" \
-        --tweets-fetched "$TOTAL_TWEETS" \
-        --error-count "$FAILED_RUNS" 2>&1
-
-    if [ $? -eq 0 ]; then
-        echo -e "${GREEN}✓ 成本数据已记录到数据库 tp_alarm.api_cost_tracking${NC}"
-    else
-        echo -e "${YELLOW}⚠ 记录到数据库失败（不影响统计显示）${NC}"
-    fi
-else
-    echo -e "${YELLOW}⚠ 未找到数据库记录器: $PYTHON_LOGGER${NC}"
-fi
-
+echo ""
+echo -e "${CYAN}ℹ️  注意事项${NC}"
+echo "=================================================="
+echo ""
+echo "此脚本仅用于显示历史统计数据。"
+echo "实际的 cost 数据由爬虫脚本在每次运行后自动记录到数据库。"
+echo "无需手动入库，避免重复统计。"
 echo ""
 echo "=================================================="
 echo ""

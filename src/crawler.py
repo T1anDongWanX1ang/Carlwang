@@ -4,7 +4,7 @@ Twitter数据爬虫核心模块
 import logging
 import os
 from typing import List, Dict, Any, Optional
-from datetime import datetime
+from datetime import datetime, timedelta
 
 # 后端可切换：默认使用 Twitter API (twitterapi)，设置环境变量 TWITTER_API_BACKEND=tweetscout 使用 TweetScout
 # 为了向后兼容KOL推文爬取，现在默认使用 twitterapi
@@ -830,7 +830,6 @@ class TwitterCrawler:
                 # 自动记录成本数据到数据库
                 try:
                     import subprocess
-                    from datetime import datetime
                     import os
 
                     run_id = datetime.now().strftime("%Y%m%d_%H%M%S")
@@ -850,11 +849,20 @@ class TwitterCrawler:
                             '--tweets-fetched', str(api_stats.get('tweets_fetched', 0)),
                             '--error-count', str(api_stats.get('error_count', 0))
                         ]
-                        subprocess.run(cmd, cwd=project_root, capture_output=True, text=True)
-                        self.logger.info("✓ 成本数据已自动记录到数据库")
+                        
+                        self.logger.info(f"正在执行成本记录命令: {' '.join(cmd)}")
+                        result = subprocess.run(cmd, cwd=project_root, capture_output=True, text=True)
+                        
+                        if result.returncode == 0:
+                            self.logger.info("✓ 成本数据已自动记录到数据库")
+                        else:
+                            self.logger.error(f"❌ 记录成本数据脚本执行失败 (Exit Code: {result.returncode})")
+                            self.logger.error(f"标准错误输出: {result.stderr}")
+                            self.logger.error(f"标准输出: {result.stdout}")
+                            
                 except Exception as e:
-                    self.logger.warning(f"记录成本数据失败（不影响主流程）: {e}")
-
+                    self.logger.error(f"🚨 记录成本数据过程发生异常: {e}")
+                
                 return True
             else:
                 self.logger.error("保存项目推文到数据库失败")
@@ -863,6 +871,141 @@ class TwitterCrawler:
                 
         except Exception as e:
             self.logger.error(f"爬取项目推文数据异常: {e}")
+            self.error_count += 1
+            return False
+
+    def update_historical_metrics(self, days: float = 7) -> bool:
+        """
+        更新历史推文的互动数据（点赞、转发、评论、浏览量）
+        
+        Args:
+            days: 更新过去多少天的推文
+            
+        Returns:
+            是否成功
+        """
+        self.crawl_count += 1
+        self.last_crawl_time = datetime.now()
+        
+        try:
+            self.api_client.reset_stats()
+            self.logger.info(f"开始更新历史推文互动数据 (范围: 过去 {days} 天)")
+            
+            # 1. 从数据库获取需要更新的推文ID
+            # 注意：这里直接操作 tweet_dao 的 db_manager，稍微破坏了封装但更高效
+            table_name = self.tweet_dao.table_name
+            # 计算起始时间
+            start_time = (datetime.now() - timedelta(days=days)).strftime('%Y-%m-%d %H:%M:%S')
+            
+            sql = f"SELECT id_str FROM {table_name} WHERE created_at_datetime >= %s ORDER BY created_at_datetime DESC"
+            
+            self.logger.info(f"查询数据库中 {start_time} 之后的推文...")
+            results = self.tweet_dao.db_manager.execute_query(sql, (start_time,))
+            
+            if not results:
+                self.logger.info("没有找到需要更新的推文")
+                return True
+                
+            tweet_ids = [row['id_str'] for row in results]
+            self.logger.info(f"共找到 {len(tweet_ids)} 条需要更新的推文")
+            
+            # 2. 调用 API 批量获取最新数据
+            # 注意：tweet_ids 可能会非常多，api_client.fetch_tweets_by_ids 内部已经做了分批处理
+            updated_tweets_data = self.api_client.fetch_tweets_by_ids(tweet_ids)
+            
+            if not updated_tweets_data:
+                self.logger.warning("未从 API 获取到任何更新数据")
+                return False
+                
+            self.logger.info(f"从 API 成功获取到 {len(updated_tweets_data)} 条推文的最新数据")
+            
+            # 3. 构造 SQL 进行批量更新
+            # 我们只需要更新互动指标
+            
+            batch_size = 500
+            
+            sql_update = f"""
+                UPDATE {table_name} 
+                SET favorite_count = %s, 
+                    retweet_count = %s, 
+                    reply_count = %s, 
+                    quote_count = %s, 
+                    view_count = %s,
+                    bookmark_count = %s
+                WHERE id_str = %s
+            """
+            
+            update_params = []
+            for t_data in updated_tweets_data:
+                update_params.append((
+                    t_data.get('favorite_count', 0),
+                    t_data.get('retweet_count', 0),
+                    t_data.get('reply_count', 0),
+                    t_data.get('quote_count', 0),
+                    t_data.get('view_count', 0),
+                    t_data.get('bookmark_count', 0),
+                    t_data.get('id_str')
+                ))
+            
+            if update_params:
+                self.logger.info(f"开始批量写入数据库 (共 {len(update_params)} 条)...")
+                total_affected = 0
+                
+                # 分批执行 UPDATE
+                for i in range(0, len(update_params), batch_size):
+                    batch = update_params[i:i+batch_size]
+                    try:
+                        with self.tweet_dao.db_manager.get_cursor() as (conn, cursor):
+                            cursor.executemany(sql_update, batch)
+                            conn.commit()
+                            total_affected += len(batch)
+                    except Exception as e:
+                        self.logger.error(f"批量更新数据库失败 (批次 {i}): {e}")
+                
+                self.logger.info(f"数据库更新完成，预计处理了 {total_affected} 条记录")
+                self.success_count += 1
+                
+                # 记录成本（复用 run_project_once 里的逻辑）
+                api_stats = self.api_client.get_request_stats()
+                self.logger.info("=" * 50)
+                self.logger.info("💰 更新操作成本统计")
+                self.logger.info(f"API请求数: {api_stats.get('total_requests', 0)}")
+                self.logger.info(f"总成本: ${api_stats.get('total_cost_usd', 0):.6f} USD")
+                self.logger.info("=" * 50)
+                
+                # 自动记录成本数据到数据库
+                try:
+                    import subprocess
+                    import os
+
+                    run_id = datetime.now().strftime("%Y%m%d_%H%M%S")
+                    current_dir = os.path.dirname(os.path.abspath(__file__))
+                    project_root = os.path.dirname(current_dir)
+                    logger_path = os.path.join(project_root, 'src', 'utils', 'cost_db_logger.py')
+                    venv_python = os.path.join(project_root, 'venv', 'bin', 'python')
+
+                    if os.path.exists(logger_path) and os.path.exists(venv_python):
+                        cmd = [
+                            venv_python, logger_path,
+                            '--task-name', 'update_metrics',
+                            '--run-id', run_id,
+                            '--total-requests', str(api_stats.get('total_requests', 0)),
+                            '--total-cost', f"{api_stats.get('total_cost_usd', 0):.6f}",
+                            '--tweets-fetched', str(api_stats.get('tweets_fetched', 0)),
+                            '--error-count', str(api_stats.get('error_count', 0))
+                        ]
+                        subprocess.run(cmd, cwd=project_root, capture_output=True, text=True)
+                        self.logger.info("✓ 成本数据已自动记录到数据库")
+                except Exception as e:
+                    self.logger.warning(f"记录成本数据失败: {e}")
+                
+                return True
+            else:
+                self.logger.warning("没有需要更新的数据")
+                return False
+                
+        except Exception as e:
+            self.logger.error(f"更新历史推文数据异常: {e}")
             self.error_count += 1
             return False
     

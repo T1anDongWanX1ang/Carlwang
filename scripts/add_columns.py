@@ -11,7 +11,7 @@ logger = logging.getLogger(__name__)
 
 # 数据库配置
 DB_CONFIG = {
-    'host': '34.46.218.219',
+    'host': '35.209.219.220',
     'port': 9030,
     'user': 'transaction',
     'password': 'trans_dskke33@72hxcys',

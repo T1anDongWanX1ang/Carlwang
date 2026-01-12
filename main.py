@@ -31,14 +31,16 @@ def main():
     
     # 命令行参数解析
     parser = argparse.ArgumentParser(description='Twitter数据爬虫')
-    parser.add_argument('--mode', choices=['once', 'schedule', 'test', 'topic', 'project', 'project-once', 'project-schedule', 'health', 'cost'], default='once',
-                       help='运行模式: once=单次执行, schedule=定时调度, test=测试连接, health=健康检查, cost=成本统计')
+    parser.add_argument('--mode', choices=['once', 'schedule', 'test', 'topic', 'project', 'project-once', 'project-schedule', 'health', 'cost', 'update-metrics', 'update-metrics-daemon'], default='once',
+                       help='运行模式: once=单次执行, schedule=定时调度, test=测试连接, health=健康检查, cost=成本统计, update-metrics=更新历史指标, update-metrics-daemon=守护进程模式更新历史指标')
     parser.add_argument('--max-pages', type=int, help='最大页数')
     parser.add_argument('--page-size', type=int, help='每页大小')
     parser.add_argument('--interval', type=int, help='调度间隔(分钟)')
     parser.add_argument('--hours-limit', type=float, default=3, help='时间限制(小时，可为小数)，只拉取过去N小时的推文，默认3小时')
+    parser.add_argument('--days', type=float, default=7, help='天数限制，用于 update-metrics 模式，默认7天')
     parser.add_argument('--config', type=str, help='配置文件路径')
     parser.add_argument('--cost-period', type=int, default=24, help='成本统计周期(小时)，默认24小时')
+    parser.add_argument('--list-id', type=str, help='指定Twitter List ID')
     
     args = parser.parse_args()
     
@@ -74,6 +76,10 @@ def main():
             run_health_check()
         elif args.mode == 'cost':
             run_cost_stats(args)
+        elif args.mode == 'update-metrics':
+            run_update_metrics(args)
+        elif args.mode == 'update-metrics-daemon':
+            run_update_metrics_daemon(args)
         
     except KeyboardInterrupt:
         logger.info("接收到中断信号，正在退出...")
@@ -132,6 +138,7 @@ def run_once(args):
 
     # 执行爬取（直接使用配置文件中的list_ids进行并行获取，使用智能时间检测）
     success = crawler.crawl_tweets(
+        list_id=args.list_id,
         max_pages=args.max_pages,
         page_size=args.page_size,
         hours_limit=args.hours_limit
@@ -191,6 +198,7 @@ def run_scheduled(args):
 
         # 执行爬取（直接使用配置文件中的list_ids进行并行获取，使用智能时间检测）
         crawl_success = crawler.crawl_tweets(
+            list_id=args.list_id,
             max_pages=args.max_pages,
             page_size=args.page_size,
             hours_limit=args.hours_limit
@@ -476,6 +484,93 @@ def run_project_scheduled(args):
     except KeyboardInterrupt:
         logger.info("接收到停止信号...")
         scheduler.stop()
+
+
+def run_update_metrics(args):
+    """运行历史推文指标更新"""
+    logger = get_logger(__name__)
+    
+    logger.info("=" * 60)
+    logger.info(f"🔄 开始更新历史推文指标 (范围: 过去 {args.days} 天)")
+    logger.info("=" * 60)
+    
+    # 设置使用项目推文专用表
+    from src.database.tweet_dao import tweet_dao
+    tweet_dao.table_name = 'twitter_tweet_back_test_cmc300'
+    logger.info(f"操作数据表: {tweet_dao.table_name}")
+    
+    # 执行更新
+    success = crawler.update_historical_metrics(days=args.days)
+    
+    if success:
+        logger.info("✅ 历史推文指标更新成功")
+        sys.exit(0)
+    else:
+        logger.error("❌ 历史推文指标更新失败")
+        sys.exit(1)
+
+
+def run_update_metrics_daemon(args):
+    """守护进程模式运行历史推文指标更新（每天服务器4点，即北京时间12点）"""
+    logger = get_logger(__name__)
+    
+    logger.info("=" * 60)
+    logger.info(f"🔄 启动历史推文指标更新守护进程")
+    logger.info(f"📅 调度时间: 每天服务器 04:00 (北京 12:00)")
+    logger.info(f"📊 更新范围: 过去 {args.days} 天")
+    logger.info("=" * 60)
+    
+    # 设置使用项目推文专用表
+    from src.database.tweet_dao import tweet_dao
+    tweet_dao.table_name = 'twitter_tweet_back_test_cmc300'
+    logger.info(f"操作数据表: {tweet_dao.table_name}")
+    
+    from datetime import datetime, timedelta
+    import time
+    
+    try:
+        while True:
+            now = datetime.now()
+            # 目标时间：今天的 04:00:00
+            target_time = now.replace(hour=4, minute=0, second=0, microsecond=0)
+            
+            # 如果现在已经过了 04点，目标设为明天 04点
+            if now >= target_time:
+                target_time += timedelta(days=1)
+                
+            wait_seconds = (target_time - now).total_seconds()
+            hours_wait = wait_seconds / 3600
+            
+            logger.info(f"⏳ 下次更新时间: {target_time.strftime('%Y-%m-%d %H:%M:%S')} (等待约 {hours_wait:.2f} 小时)")
+            
+            # 休眠直到目标时间
+            # 为了能够响应中断，我们分段休眠
+            while wait_seconds > 0:
+                sleep_chunk = min(wait_seconds, 60) # 每次最多睡60秒
+                time.sleep(sleep_chunk)
+                wait_seconds -= sleep_chunk
+                
+                # 可选：每隔1小时打印一次心跳
+                # if int(wait_seconds) % 3600 == 0 and wait_seconds > 60:
+                #    logger.info(f"心跳: 距离更新还有 {wait_seconds/3600:.1f} 小时")
+            
+            # 时间到，执行任务
+            logger.info("⏰ 到达预定时间，开始执行更新任务...")
+            success = crawler.update_historical_metrics(days=args.days)
+            
+            if success:
+                logger.info("✅ 本次定时更新完成")
+            else:
+                logger.error("❌ 本次定时更新失败")
+                
+            # 循环继续，计算明天的目标时间
+            
+    except KeyboardInterrupt:
+        logger.info("守护进程接收到停止信号，正在退出...")
+        sys.exit(0)
+    except Exception as e:
+        logger.error(f"守护进程发生异常: {e}")
+        sys.exit(1)
 
 
 def run_health_check():

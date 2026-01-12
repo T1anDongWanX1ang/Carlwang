@@ -245,7 +245,7 @@ python main.py --config /path/to/custom/config.json --mode once
 {
   "database": {
     "type": "mysql",
-    "host": "34.46.218.219",
+    "host": "35.209.219.220",
     "port": 9030,
     "database": "public_data",
     "username": "transaction",

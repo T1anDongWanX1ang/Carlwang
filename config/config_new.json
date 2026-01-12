@@ -1,0 +1,153 @@
+{
+  "api": {
+    "base_url": "https://api.tweetscout.io/v2",
+    "endpoints": {
+      "list_tweets": "/list-tweets"
+    },
+    "headers": {
+      "Accept": "application/json",
+      "X-API-Key": "YOUR_TWEETSCOUT_API_KEY",
+      "ApiKey": "YOUR_TWEETSCOUT_API_KEY"
+    },
+    "default_params": {
+      "list_id": "YOUR_DEFAULT_LIST_ID",
+      "list_ids": [
+        "YOUR_DEFAULT_LIST_ID"
+      ],
+      "list_ids_kol": [
+        "YOUR_KOL_LIST_ID"
+      ],
+      "list_ids_project": [
+        "YOUR_PROJECT_LIST_ID_1",
+        "YOUR_PROJECT_LIST_ID_2"
+      ],
+      "includeReplies": true
+    },
+    "pagination": {
+      "page_size": 100,
+      "max_pages": 10
+    },
+    "timeout": 30,
+    "retry_attempts": 3,
+    "retry_delay": 5
+  },
+  "api_twitterapi": {
+    "base_url": "https://api.twitterapi.io",
+    "endpoints": {
+      "list_tweets": "/twitter/list/tweets"
+    },
+    "headers": {
+      "Accept": "application/json",
+      "X-API-Key": "YOUR_TWITTERAPI_IO_KEY"
+    },
+    "default_params": {
+      "list_id": "YOUR_DEFAULT_LIST_ID",
+      "list_ids": [
+        "YOUR_DEFAULT_LIST_ID"
+      ],
+      "list_ids_kol": [
+        "YOUR_KOL_LIST_ID"
+      ],
+      "list_ids_project": [
+        "YOUR_PROJECT_LIST_ID_1",
+        "YOUR_PROJECT_LIST_ID_2"
+      ],
+      "includeReplies": true
+    },
+    "pagination": {
+      "page_size": 100,
+      "max_pages": 10
+    },
+    "timeout": 30,
+    "retry_attempts": 3,
+    "retry_delay": 5
+  },
+  "_comment_chatgpt": "Production runs should prefer env vars for api_key; do not commit real keys.",
+  "chatgpt": {
+    "api_type": "openai",
+    "base_url": "https://api.example.com/v1",
+    "api_key": "YOUR_OPENAI_COMPATIBLE_API_KEY",
+    "model": "YOUR_MODEL_NAME",
+    "timeout": 30,
+    "max_retries": 3,
+    "retry_delay": 2,
+    "batch_processing": {
+      "topic_batch_size": 20,
+      "kol_batch_size": 8,
+      "project_batch_size": 25,
+      "content_merge_threshold": 2000,
+      "enable_intelligent_grouping": true,
+      "enable_content_deduplication": true,
+      "similarity_threshold": 0.75
+    },
+    "optimization": {
+      "enable_content_filtering": true,
+      "min_engagement_threshold": 5,
+      "enable_response_caching": true,
+      "cache_ttl_hours": 24,
+      "max_prompt_tokens": 3000,
+      "enable_batch_consolidation": true
+    },
+    "enable_topic_analysis": true,
+    "enable_sentiment_analysis": true,
+    "enable_kol_analysis": true,
+    "enable_project_analysis": true
+  },
+  "chatgpt_backup_gemini": {
+    "api_type": "gemini",
+    "api_key": "YOUR_GEMINI_API_KEY",
+    "model": "gemini-2.5-flash-lite",
+    "timeout": 30,
+    "max_retries": 3,
+    "retry_delay": 2
+  },
+  "database": {
+    "type": "mysql",
+    "host": "YOUR_DATABASE_HOST",
+    "port": 3306,
+    "database": "YOUR_DATABASE_NAME",
+    "username": "YOUR_DATABASE_USERNAME",
+    "password": "YOUR_DATABASE_PASSWORD",
+    "tables": {
+      "tweet": "twitter_tweet",
+      "tweet_kol": "twitter_tweet",
+      "tweet_project": "twitter_tweet_back_test_cmc300",
+      "user": "twitter_user",
+      "topic": "topics",
+      "kol": "kols",
+      "project": "twitter_projects"
+    },
+    "connection_pool": {
+      "max_connections": 10,
+      "min_connections": 1,
+      "connection_timeout": 30,
+      "idle_timeout": 600
+    },
+    "options": {
+      "useUnicode": true,
+      "characterEncoding": "utf8",
+      "serverTimezone": "GMT",
+      "useSSL": false,
+      "allowPublicKeyRetrieval": true
+    }
+  },
+  "scheduler": {
+    "interval_minutes": 5,
+    "max_workers": 1,
+    "enable_logging": true
+  },
+  "logging": {
+    "level": "INFO",
+    "format": "%(asctime)s - %(name)s - %(levelname)s - %(funcName)s:%(lineno)d - %(message)s",
+    "file": "logs/twitter_crawler.log",
+    "max_file_size": "10MB",
+    "backup_count": 5
+  },
+  "cost_db": {
+    "host": "35.215.99.34",
+    "port": 13215,
+    "username": "alarm_user",
+    "password": "fdf3rw3983nnfl1f4",
+    "database": "tp_alarm"
+  }
+}
